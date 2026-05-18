@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Confusion Matrix & Metrics Playground</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --tp-color: #16a34a; /* Green */
+            --tn-color: #15803d; /* Dark Green */
+            --fp-color: #dc2626; /* Red */
+            --fn-color: #b91c1c; /* Dark Red */
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 220px;
+        }
+
+        /* Confusion Matrix Grid layout */
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr 80px;
+            grid-template-rows: 40px 1fr 1fr 60px;
+            gap: 8px;
+            margin: 20px 0;
+            text-align: center;
+            align-items: stretch;
+        }
+
+        .matrix-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .matrix-box {
+            padding: 15px 5px;
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .box-tp { background-color: var(--tp-color); }
+        .box-tn { background-color: var(--tn-color); }
+        .box-fp { background-color: var(--fp-color); }
+        .box-fn { background-color: var(--fn-color); }
+
+        .matrix-count { font-size: 1.6rem; font-weight: 800; }
+        .matrix-pct { font-size: 0.85rem; font-weight: 600; opacity: 0.9; margin-top: 2px; }
+        .matrix-title { font-size: 0.75rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #334155;
+            font-size: 1.2rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .radio-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #cbd5e1;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .metric-toggle-group {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+
+        .toggle-label {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #475569;
+        }
+
+        input[type="radio"] { display: none; }
+        
+        #classA-radio:checked + #classA-label { border-color: #16a34a; background: #f0fdf4; color: #16a34a; }
+        #classB-radio:checked + #classB-label { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+
+        #metricTargetA:checked ~ .metric-toggle-group label[for="metricTargetA"],
+        #metricTargetB:checked ~ .metric-toggle-group label[for="metricTargetB"] {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* Metrics grid layout */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value { font-size: 1.4rem; font-weight: bold; color: var(--primary); margin-top: 2px;}
+        .metric-name { font-size: 0.75rem; font-weight: bold; color: #64748b; text-transform: uppercase;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Confusion Matrix & Data Metrics Playground</h1>
+        <p>Plot diagnostic distributions, tune evaluation thresholds, and parse standard classification metrics instantly.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 15px;">
+            <label>1D Predicted Probability Distribution</label>
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="distributionCanvas"></canvas>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569;">Predicted Class</div>
+            <div class="matrix-container">
+                <div class="matrix-label"></div>
+                <div class="matrix-label">Positive (+)</div>
+                <div class="matrix-label">Negative (-)</div>
+                <div class="matrix-label" style="color: #475569;">Total</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end;">Actual Positive</div>
+                <div class="matrix-box box-tp" id="m-tp">
+                    <span class="matrix-count" id="count-tp">0</span>
+                    <span class="matrix-pct" id="pct-tp">0.0%</span>
+                    <span class="matrix-title">True Positive (TP)</span>
+                </div>
+                <div class="matrix-box box-fn" id="m-fn">
+                    <span class="matrix-count" id="count-fn">0</span>
+                    <span class="matrix-pct" id="pct-fn">0.0%</span>
+                    <span class="matrix-title">False Negative (FN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-pos">0</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end;">Actual Negative</div>
+                <div class="matrix-box box-fp" id="m-fp">
+                    <span class="matrix-count" id="count-fp">0</span>
+                    <span class="matrix-pct" id="pct-fp">0.0%</span>
+                    <span class="matrix-title">False Positive (FP)</span>
+                </div>
+                <div class="matrix-box box-tn" id="m-tn">
+                    <span class="matrix-count" id="count-tn">0</span>
+                    <span class="matrix-pct" id="pct-tn">0.0%</span>
+                    <span class="matrix-title">True Negative (TN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-neg">0</div>
+
+                <div class="matrix-label" style="color: #475569;">Total</div>
+                <div class="matrix-total-cell" id="total-col-pos">0</div>
+                <div class="matrix-total-cell" id="total-col-neg">0</div>
+                <div class="matrix-total-cell" id="total-grand" style="background-color: #cbd5e1; color: #0f172a;">0</div>
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>1. Add Custom Data Point (Click on Canvas above)</label>
+                <div class="radio-group">
+                    <input type="radio" id="classA-radio" name="classSelect" value="1" checked>
+                    <label for="classA-radio" id="classA-label" class="radio-label">
+                        🟢 Actual Positive (Sick)
+                    </label>
+
+                    <input type="radio" id="classB-radio" name="classSelect" value="0">
+                    <label for="classB-radio" id="classB-label" class="radio-label">
+                        🔵 Actual Negative (Healthy)
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="thresholdSlider">2. Classification Threshold (τ)</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Decision Cutoff Line</span><span id="thresholdVal" style="color:var(--primary)">0.50</span></div>
+                    <input type="range" id="thresholdSlider" min="0.05" max="0.95" value="0.5" step="0.05">
+                </div>
+                <span style="font-size:0.7rem; color:#64748b;">Points to the right of this line are predicted as Positive. Points to the left are predicted as Negative.</span>
+            </div>
+
+            <div class="btn-grid">
+                <button id="btnSample" class="btn-secondary">Load Standard Sample Set</button>
+                <button id="btnClear" class="btn-danger">Clear All Points</button>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>3. Select Target Focus Class for Metrics Calculations</label>
+                <input type="radio" id="metricTargetA" name="metricClassTarget" value="1" checked>
+                <input type="radio" id="metricTargetB" name="metricClassTarget" value="0">
+                <div class="metric-toggle-group">
+                    <label for="metricTargetA" class="toggle-label">Positive Class (+)</label>
+                    <label for="metricTargetB" class="toggle-label">Negative Class (-)</label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Derived Evaluation Metrics Calculations</label>
+                <div class="metrics-grid">
+                    <div class="metric-card" title="Accuracy = (TP + TN) / Total">
+                        <div class="metric-name">Accuracy</div>
+                        <div class="metric-value" id="mVal-accuracy">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="precision-card-desc" title="Precision = TP / (TP + FP)">
+                        <div class="metric-name" id="precision-label-text">Precision</div>
+                        <div class="metric-value" id="mVal-precision">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="recall-card-desc" title="Recall (Sensitivity) = TP / (TP + FN)">
+                        <div class="metric-name" id="recall-label-text">Sensitivity (Recall)</div>
+                        <div class="metric-value" id="mVal-recall">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="specificity-card-desc" title="Specificity = TN / (TN + FP)">
+                        <div class="metric-name" id="specificity-label-text">Specificity</div>
+                        <div class="metric-value" id="mVal-specificity">0.0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="background:#f8fafc; padding:12px; font-size:0.8rem; box-shadow:none; line-height:1.4; margin:0;">
+                <strong>🔬 Classroom Tradeoff Experiment:</strong> Switch the focus class back and forth. Notice how changing the perspective updates which outcomes constitute "Precision" or "Sensitivity", while global system **Accuracy** stays perfectly uniform!
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('distributionCanvas');
+    const ctx = canvas.getContext('2d');
+    const thresholdSlider = document.getElementById('thresholdSlider');
+    const thresholdVal = document.getElementById('thresholdVal');
+    const btnSample = document.getElementById('btnSample');
+    const btnClear = document.getElementById('btnClear');
+    const metricTargetA = document.getElementById('metricTargetA');
+    const metricTargetB = document.getElementById('metricTargetB');
+
+    // Metrics DOM anchors
+    const countTp = document.getElementById('count-tp');
+    const countTn = document.getElementById('count-tn');
+    const countFp = document.getElementById('count-fp');
+    const countFn = document.getElementById('count-fn');
+
+    const pctTp = document.getElementById('pct-tp');
+    const pctTn = document.getElementById('pct-tn');
+    const pctFp = document.getElementById('pct-fp');
+    const pctFn = document.getElementById('pct-fn');
+
+    const totalRowPos = document.getElementById('total-row-pos');
+    const totalRowNeg = document.getElementById('total-row-neg');
+    const totalColPos = document.getElementById('total-col-pos');
+    const totalColNeg = document.getElementById('total-col-neg');
+    const totalGrand = document.getElementById('total-grand');
+
+    const mValAccuracy = document.getElementById('mVal-accuracy');
+    const mValPrecision = document.getElementById('mVal-precision');
+    const mValRecall = document.getElementById('mVal-recall');
+    const mValSpecificity = document.getElementById('mVal-specificity');
+
+    const precisionLabelText = document.getElementById('precision-label-text');
+    const recallLabelText = document.getElementById('recall-label-text');
+    const specificityLabelText = document.getElementById('specificity-label-text');
+    
+    const precisionCardDesc = document.getElementById('precision-card-desc');
+    const recallCardDesc = document.getElementById('recall-card-desc');
+    const specificityCardDesc = document.getElementById('specificity-card-desc');
+
+    let dataPoints = [];
+    let threshold = 0.5;
+
+    // Hardcoded hex values matching variables layout
+    const COLOR_REAL_POS = '#16a34a';
+    const COLOR_REAL_NEG = '#2563eb'; // Blue for actual negatives
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 220;
+        if(dataPoints.length === 0) loadSampleDataset();
+        else evaluateMatrixAndMetrics();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Capture Canvas Clicks to Add Manual Points
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Map mouse horizontal X coordinate directly to a probability value between 0.0 and 1.0
+        let probValue = (mouseX - 40) / (canvas.width - 80);
+        if(probValue < 0) probValue = 0;
+        if(probValue > 1) probValue = 1;
+
+        const actualLabel = document.querySelector('input[name="classSelect"]:checked').value === "1" ? 1 : 0;
+
+        dataPoints.push({ prob: probValue, y: mouseY, label: actualLabel });
+        evaluateMatrixAndMetrics();
+    });
+
+    function loadSampleDataset() {
+        dataPoints = [];
+        const h = 220;
+
+        // Standard medical binary scenario setup:
+        // Actual Positives (Sick) skew toward higher probability values
+        const posProbabilities = [0.45, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92];
+        posProbabilities.forEach(p => {
+            dataPoints.push({ prob: p, y: h * 0.3 + (Math.random() - 0.5) * 40, label: 1 });
+        });
+
+        // Actual Negatives (Healthy) skew toward lower probability values
+        const negProbabilities = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.55, 0.65];
+        negProbabilities.forEach(p => {
+            dataPoints.push({ prob: p, y: h * 0.7 + (Math.random() - 0.5) * 40, label: 0 });
+        });
+
+        evaluateMatrixAndMetrics();
+    }
+
+    // --- MAIN CORE MATRIX COUNTER & EVALUATION MECHANICS ENGINE ---
+    function evaluateMatrixAndMetrics() {
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+
+        dataPoints.forEach(p => {
+            // Predict label based on active classification threshold cutoff
+            let predictedLabel = p.prob >= threshold ? 1 : 0;
+
+            if (p.label === 1 && predictedLabel === 1) tp++;
+            else if (p.label === 0 && predictedLabel === 0) tn++;
+            else if (p.label === 0 && predictedLabel === 1) fp++;
+            else if (p.label === 1 && predictedLabel === 0) fn++;
+        });
+
+        // Write counts into Grid elements
+        countTp.innerText = tp;
+        countTn.innerText = tn;
+        countFp.innerText = fp;
+        countFn.innerText = fn;
+
+        // Calculate totals
+        let actualPositiveTotal = tp + fn;
+        let actualNegativeTotal = fp + tn;
+        let predictedPositiveTotal = tp + fp;
+        let predictedNegativeTotal = fn + tn;
+        let total = tp + tn + fp + fn;
+
+        // Update Matrix Totals elements
+        totalRowPos.innerText = actualPositiveTotal;
+        totalRowNeg.innerText = actualNegativeTotal;
+        totalColPos.innerText = predictedPositiveTotal;
+        totalColNeg.innerText = predictedNegativeTotal;
+        totalGrand.innerText = total;
+
+        // Calculate percentages as % of actual classes (row totals)
+        let tpPctValue = actualPositiveTotal > 0 ? (tp / actualPositiveTotal * 100).toFixed(1) : '0.0';
+        let fnPctValue = actualPositiveTotal > 0 ? (fn / actualPositiveTotal * 100).toFixed(1) : '0.0';
+        let fpPctValue = actualNegativeTotal > 0 ? (fp / actualNegativeTotal * 100).toFixed(1) : '0.0';
+        let tnPctValue = actualNegativeTotal > 0 ? (tn / actualNegativeTotal * 100).toFixed(1) : '0.0';
+
+        // Write percentages into cells
+        pctTp.innerText = `${tpPctValue}%`;
+        pctFn.innerText = `${fnPctValue}%`;
+        pctFp.innerText = `${fpPctValue}%`;
+        pctTn.innerText = `${tnPctValue}%`;
+
+        // Calculate global Accuracy
+        let accuracy = total > 0 ? (tp + tn) / total : 0;
+        mValAccuracy.innerText = `${(accuracy * 100).toFixed(1)}%`;
+
+        // Check active target class choice context to alternate metrics math focus rules
+        const targetClassIsPositive = document.querySelector('input[name="metricClassTarget"]:checked').value === "1";
+
+        if (targetClassIsPositive) {
+            // Default Mode: Focusing on Positive Class (+)
+            precisionLabelText.innerText = "Precision";
+            recallLabelText.innerText = "Sensitivity (Recall)";
+            specificityLabelText.innerText = "Specificity";
+
+            precisionCardDesc.title = "Precision = TP / (TP + FP)";
+            recallCardDesc.title = "Sensitivity = TP / (TP + FN)";
+            specificityCardDesc.title = "Specificity = TN / (TN + FP)";
+
+            let precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+            let recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+            let specificity = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+
+            mValPrecision.innerText = (tp + fp) > 0 ? `${(precision * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tp + fn) > 0 ? `${(recall * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tn + fp) > 0 ? `${(specificity * 100).toFixed(1)}%` : "0.0%";
+        } else {
+            // Alternate Mode: Focusing on Negative Class (-)
+            precisionLabelText.innerText = "Precision (-)";
+            recallLabelText.innerText = "Specificity (Recall -)";
+            specificityLabelText.innerText = "Sensitivity (-)";
+
+            precisionCardDesc.title = "Precision (-) = TN / (TN + FN)";
+            recallCardDesc.title = "Specificity (Recall -) = TN / (TN + FP)";
+            specificityCardDesc.title = "Sensitivity (-) = TP / (TP + FN)";
+
+            let precisionNeg = (tn + fn) > 0 ? tn / (tn + fn) : 0;
+            let recallNeg = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+            let specificityNeg = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+
+            mValPrecision.innerText = (tn + fn) > 0 ? `${(precisionNeg * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tn + fp) > 0 ? `${(recallNeg * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tp + fn) > 0 ? `${(specificityNeg * 100).toFixed(1)}%` : "0.0%";
+        }
+
+        render();
+    }
+
+    // --- GRAPHICAL RENDER GRID ENGINE ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Draw basic layout axis lines
+        ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(40, h - 40); ctx.lineTo(w - 40, h - 40); // X Axis line
+        ctx.stroke();
+
+        // Label probability scale ticks along horizontal axis line boundary
+        ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText("Probability = 0.0 (Low)", 70, h - 15);
+        ctx.fillText("0.5", w / 2, h - 15);
+        ctx.fillText("1.0 (High)", w - 70, h - 15);
+
+        // Render data points elements inside plot space
+        dataPoints.forEach(p => {
+            // Calculate pixel position on canvas view bounding maps
+            let cx = 40 + p.prob * (w - 80);
+            let cy = p.y;
+
+            // Determine if prediction matches actual label to highlight error cases
+            let predictedLabel = p.prob >= threshold ? 1 : 0;
+            let isMisclassified = p.label !== predictedLabel;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+            ctx.fillStyle = p.label === 1 ? COLOR_REAL_POS : COLOR_REAL_NEG;
+            ctx.fill();
+
+            // Overlay outer outline ring to visually spotlight errors (FN or FP)
+            if (isMisclassified) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+                ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2;
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        });
+
+        // Draw Dynamic Decision Threshold Cutoff Boundary Vertical Line
+        let lineX = 40 + threshold * (w - 80);
+        ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(lineX, 10); ctx.lineTo(lineX, h - 40);
+        ctx.stroke();
+
+        // Label cut-off line parameters tag
+        ctx.fillStyle = '#2563eb'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`Threshold (τ = ${threshold.toFixed(2)})`, lineX, 8);
+    }
+
+    // Controls Event listeners configurations
+    thresholdSlider.addEventListener('input', (e) => {
+        threshold = parseFloat(e.target.value);
+        thresholdVal.innerText = threshold.toFixed(2);
+        evaluateMatrixAndMetrics();
+    });
+
+    [metricTargetA, metricTargetB].forEach(radio => {
+        radio.addEventListener('change', evaluateMatrixAndMetrics);
+    });
+
+    btnSample.addEventListener('click', loadSampleDataset);
+    btnClear.addEventListener('click', () => { dataPoints = []; evaluateMatrixAndMetrics(); });
+
+    // Initial Startup Bootstrap configuration sequence
+    setTimeout(() => { resizeCanvas(); }, 100);
+</script>
+</body>
+</html>

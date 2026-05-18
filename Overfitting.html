@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Concept Simulator: Overfitting & Cross-Validation</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+            border: 1px solid #e2e8f0;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #fff;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 450px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .slider-val {
+            font-weight: normal;
+            color: var(--primary);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        
+        .toggle-btn {
+            background: #e2e8f0;
+            color: var(--text);
+        }
+        .toggle-btn.active {
+            background: var(--success);
+            color: white;
+        }
+
+        .metrics {
+            margin-top: 5px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .metric-box {
+            padding: 10px;
+            border-radius: 6px;
+            background: #f1f5f9;
+        }
+        .metric-box.train { border-left: 4px solid var(--primary); }
+        .metric-box.test { border-left: 4px solid var(--danger); }
+        .metric-num { font-size: 1.2rem; font-weight: bold; }
+
+        /* Cross Val Visualizer Grid */
+        .cv-grid {
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .cv-row {
+            display: grid;
+            grid-template-columns: 55px repeat(5, 1fr);
+            gap: 4px;
+            align-items: center;
+        }
+        .cv-label { font-size: 0.75rem; font-weight: bold; text-align: left; color: #475569;}
+        .cv-block {
+            height: 20px;
+            border-radius: 3px;
+            text-align: center;
+            font-size: 0.7rem;
+            color: white;
+            line-height: 20px;
+            font-weight: bold;
+        }
+        .cv-train { background: #93c5fd; color: #1e3a8a; }
+        .cv-val { background: #fca5a5; color: #7f1d1d; }
+
+        .instructions {
+            font-size: 0.85rem;
+            color: #475569;
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+
+        .explanation-card {
+            margin-top: 20px;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .explanation-card h3 {
+            margin-top: 0;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+
+        .explanation-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .explanation-grid { grid-template-columns: 1fr; }
+        }
+
+        .exp-section {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+        }
+
+        .exp-section h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .dot-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Interactive ML Concept Simulator</h1>
+        <p>Teach Overfitting, Underfitting, and Cross-Validation dynamically.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card">
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="plotCanvas"></canvas>
+            </div>
+            <div class="instructions">
+                <strong>💡 Classroom Instructions:</strong> Click inside the canvas above to plot custom data points! Try plotting a noisy wave pattern, then ramp up the complexity to see overfitting.
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>Model Complexity (Polynomial Degree): <span id="degVal" class="slider-val">1</span></label>
+                <input type="range" id="polyDegree" min="1" max="9" value="1" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>Data Variance (Noise Level): <span id="noiseVal" class="slider-val">50</span></label>
+                <input type="range" id="noiseLevel" min="0" max="120" value="50" step="5">
+            </div>
+
+            <div class="control-group">
+                <label>Cross-Validation Mode</label>
+                <button id="cvToggle" class="toggle-btn">Turn On 5-Fold CV</button>
+                <div id="cvVisualizer" style="display: none; margin-top: 10px;">
+                    <label>Active Testing Fold:</label>
+                    <input type="range" id="cvFoldSlider" min="1" max="5" value="1" step="1">
+                    <div class="cv-grid">
+                        <div class="cv-row"><span class="cv-label">Split 1</span><div class="cv-block cv-val" id="b-1-1">Val</div><div class="cv-block cv-train" id="b-1-2">Train</div><div class="cv-block cv-train" id="b-1-3">Train</div><div class="cv-block cv-train" id="b-1-4">Train</div><div class="cv-block cv-train" id="b-1-5">Train</div></div>
+                        <div class="cv-row"><span class="cv-label">Split 2</span><div class="cv-block cv-train" id="b-2-1">Train</div><div class="cv-block cv-val" id="b-2-2">Val</div><div class="cv-block cv-train" id="b-2-3">Train</div><div class="cv-block cv-train" id="b-2-4">Train</div><div class="cv-block cv-train" id="b-2-5">Train</div></div>
+                        <div class="cv-row"><span class="cv-label">Split 3</span><div class="cv-block cv-train" id="b-3-1">Train</div><div class="cv-block cv-train" id="b-3-2">Train</div><div class="cv-block cv-val" id="b-3-3">Val</div><div class="cv-block cv-train" id="b-3-4">Train</div><div class="cv-block cv-train" id="b-3-5">Train</div></div>
+                        <div class="cv-row"><span class="cv-label">Split 4</span><div class="cv-block cv-train" id="b-4-1">Train</div><div class="cv-block cv-train" id="b-4-2">Train</div><div class="cv-block cv-train" id="b-4-3">Train</div><div class="cv-block cv-val" id="b-4-4">Val</div><div class="cv-block cv-train" id="b-4-5">Train</div></div>
+                        <div class="cv-row"><span class="cv-label">Split 5</span><div class="cv-block cv-train" id="b-5-1">Train</div><div class="cv-block cv-train" id="b-5-2">Train</div><div class="cv-block cv-train" id="b-5-3">Train</div><div class="cv-block cv-train" id="b-5-4">Train</div><div class="cv-block cv-val" id="b-5-5">Val</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid #e2e8f0;">
+
+            <div>
+                <label id="performanceTitle" style="font-weight: 700;">Model Performance Summary</label>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-weight: bold; font-size: 0.85rem; text-align: center; margin-top: 10px;">
+                    <div id="trainHeading" style="color: var(--primary);">TRAIN SET</div>
+                    <div id="testHeading" style="color: var(--danger);">TEST SET</div>
+                </div>
+
+                <div class="metrics">
+                    <div class="metric-box train">
+                        <div style="font-size:0.75rem; color:#64748b;">MSE (Loss)</div>
+                        <div class="metric-num" id="trainError">0.00</div>
+                    </div>
+                    <div class="metric-box test">
+                        <div style="font-size:0.75rem; color:#64748b;">MSE (Loss)</div>
+                        <div class="metric-num" id="testError">0.00</div>
+                    </div>
+                    
+                    <div class="metric-box train">
+                        <div style="font-size:0.75rem; color:#64748b;">MAPE</div>
+                        <div class="metric-num" id="trainMape">0.0%</div>
+                    </div>
+                    <div class="metric-box test">
+                        <div style="font-size:0.75rem; color:#64748b;">MAPE</div>
+                        <div class="metric-num" id="testMape">0.0%</div>
+                    </div>
+
+                    <div class="metric-box train">
+                        <div style="font-size:0.75rem; color:#64748b;">R² Score</div>
+                        <div class="metric-num" id="trainR2">0.00</div>
+                    </div>
+                    <div class="metric-box test">
+                        <div style="font-size:0.75rem; color:#64748b;">R² Score</div>
+                        <div class="metric-num" id="testR2">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="clearBtn" class="btn-danger" style="margin-top:10px;">Reset & Clear Data</button>
+            <button id="demoBtn" class="btn-primary">Generate Noisy Sine Wave</button>
+        </div>
+    </div>
+
+    <div class="explanation-card">
+        <h3>📊 Understanding Data Splits & Color Coding</h3>
+        <div class="explanation-grid">
+            <div class="exp-section" style="border-top: 4px solid #3b82f6;">
+                <h4 style="color: #1d4ed8;"><span class="dot-indicator" style="background: #3b82f6;"></span>Training Data (Blue Points)</h4>
+                <p style="margin: 0; font-size: 0.88rem; color: #334155;">
+                    These points represent the dataset elements exposed to the model during the learning phase. The mathematical curve adjusts itself <strong>exclusively</strong> to match these positions. When you increase the polynomial degree, notice how the blue line twists aggressively to reduce the <strong>Train Error</strong> score.
+                </p>
+            </div>
+            <div class="exp-section" style="border-top: 4px solid #ef4444;">
+                <h4 style="color: #b91c1c;"><span class="dot-indicator" style="background: #ef4444;"></span>Validation / Test Data (Red Points)</h4>
+                <p style="margin: 0; font-size: 0.88rem; color: #334155;">
+                    These points are strictly hidden from the fitting calculations to simulate "unseen" real-world data. They measure the true generalizability of the model. When overfitting occurs (high polynomial degrees), the curve fits the blue points perfectly but swings wildly away from these red points, causing a massive spike in <strong>Test / Validation Error</strong>.
+                </p>
+            </div>
+        </div>
+        
+        <div class="instructions" style="margin-top: 15px; border-left: 4px solid var(--success); background: #f0fdf4;">
+            <strong>🔬 Dynamic Cross-Validation Logic:</strong> When 5-Fold Cross-Validation is enabled, each point on the graph displays a number indicating its assigned partition fold. Moving the <em>Active Testing Fold</em> slider shifts the <strong>Red Validation</strong> assignment to that chosen subset number, automatically transitioning all other folds into the <strong>Blue Training</strong> matrix. This illustrates how every sample gets a turn to act as validation data!
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('plotCanvas');
+    const ctx = canvas.getContext('2d');
+    const degreeSlider = document.getElementById('polyDegree');
+    const degVal = document.getElementById('degVal');
+    const noiseSlider = document.getElementById('noiseLevel');
+    const noiseVal = document.getElementById('noiseVal');
+    const clearBtn = document.getElementById('clearBtn');
+    const demoBtn = document.getElementById('demoBtn');
+    const cvToggle = document.getElementById('cvToggle');
+    const cvVisualizer = document.getElementById('cvVisualizer');
+    const cvFoldSlider = document.getElementById('cvFoldSlider');
+    const trainErrorEl = document.getElementById('trainError');
+    const testErrorEl = document.getElementById('testError');
+    const trainMapeEl = document.getElementById('trainMape');
+    const testMapeEl = document.getElementById('testMape');
+    const trainR2El = document.getElementById('trainR2');
+    const testR2El = document.getElementById('testR2');
+    const performanceTitle = document.getElementById('performanceTitle');
+    const trainHeading = document.getElementById('trainHeading');
+    const testHeading = document.getElementById('testHeading');
+
+    let points = [];
+    let baseDemoPoints = []; // Stores baseline mathematical trend to re-apply noise predictably
+    let isCvMode = false;
+    let currentFold = 1;
+
+    // Set rigid internal canvas dimensions 
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 450;
+        update();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initial Data Setup
+    function generateDemoData() {
+        baseDemoPoints = [];
+        points = [];
+        const numPoints = 15;
+        const currentNoise = parseFloat(noiseSlider.value);
+
+        for (let i = 0; i < numPoints; i++) {
+            let x = 50 + (canvas.width - 100) * (i / (numPoints - 1));
+            let normX = (x / canvas.width) * Math.PI * 2;
+            let baseY = canvas.height / 2 + Math.sin(normX) * 120;
+            let randOffset = (Math.random() - 0.5); // Fixed random multiplier seed per node
+            
+            baseDemoPoints.push({ x, baseY, randOffset, fold: Math.floor(i % 5) + 1 });
+            points.push({ x, y: baseY + randOffset * currentNoise, fold: Math.floor(i % 5) + 1 });
+        }
+        update();
+    }
+
+    // Capture User Clicks to Add Data
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const fold = Math.floor(Math.random() * 5) + 1; // random fold assignment 1-5
+        
+        // Custom clicked points clear the demo configuration tracking parameters
+        baseDemoPoints = []; 
+        points.push({ x, y, fold });
+        points.sort((a, b) => a.x - b.x);
+        update();
+    });
+
+    clearBtn.addEventListener('click', () => { points = []; baseDemoPoints = []; update(); });
+    demoBtn.addEventListener('click', generateDemoData);
+
+    degreeSlider.addEventListener('input', (e) => {
+        degVal.innerText = e.target.value;
+        update();
+    });
+
+    noiseSlider.addEventListener('input', (e) => {
+        const currentNoise = parseFloat(e.target.value);
+        noiseVal.innerText = currentNoise;
+        
+        // Dynamically alter noise scaling live if using generated baseline datasets
+        if (baseDemoPoints.length > 0) {
+            points = baseDemoPoints.map(p => ({
+                x: p.x,
+                y: p.baseY + p.randOffset * currentNoise,
+                fold: p.fold
+            }));
+        }
+        update();
+    });
+
+    cvToggle.addEventListener('click', () => {
+        isCvMode = !isCvMode;
+        if(isCvMode) {
+            cvToggle.classList.add('active');
+            cvToggle.innerText = "5-Fold CV: ON";
+            cvVisualizer.style.display = "block";
+            performanceTitle.innerText = "Model Performance (5-Fold Cross-Validation)";
+            trainHeading.innerText = "CV TRAIN (MEAN)";
+            testHeading.innerText = "CV VALIDATION (MEAN)";
+        } else {
+            cvToggle.classList.remove('active');
+            cvToggle.innerText = "Turn On 5-Fold CV";
+            cvVisualizer.style.display = "none";
+            performanceTitle.innerText = "Model Performance Summary";
+            trainHeading.innerText = "TRAIN SET";
+            testHeading.innerText = "TEST SET";
+        }
+        update();
+    });
+
+    cvFoldSlider.addEventListener('input', (e) => {
+        currentFold = parseInt(e.target.value);
+        updateCVVisualizerGrid();
+        update();
+    });
+
+    // Update the layout grid to show error calculations dynamically for user choice
+    function updateCVVisualizerGrid() {
+        for (let row = 1; row <= 5; row++) {
+            for (let col = 1; col <= 5; col++) {
+                const block = document.getElementById(`b-${row}-${col}`);
+                if (!block) continue;
+                
+                if (col === row) {
+                    block.className = "cv-block cv-val";
+                    block.innerText = "Val";
+                } else {
+                    block.className = "cv-block cv-train";
+                    block.innerText = "Train";
+                }
+            }
+        }
+    }
+
+    // --- LEAST SQUARES POLYNOMIAL REGRESSION MATH ---
+    function solveLeastSquares(X_matrix, Y_vector) {
+        let lhs = X_matrix;
+        let rhs = Y_vector;
+        let n = rhs.length;
+        
+        for (let i = 0; i < n; i++) {
+            let maxRow = i;
+            for (let k = i + 1; k < n; k++) {
+                if (Math.abs(lhs[k][i]) > Math.abs(lhs[maxRow][i])) maxRow = k;
+            }
+            let temp = lhs[i]; lhs[i] = lhs[maxRow]; lhs[maxRow] = temp;
+            let t = rhs[i]; rhs[i] = rhs[maxRow]; rhs[maxRow] = t;
+
+            for (let k = i + 1; k < n; k++) {
+                let c = -lhs[k][i] / lhs[i][i];
+                for (let j = i; j < n; j++) {
+                    if (i === j) lhs[k][j] = 0;
+                    else lhs[k][j] += c * lhs[i][j];
+                }
+                rhs[k] += c * rhs[i];
+            }
+        }
+        let coefficients = new Array(n).fill(0);
+        for (let i = n - 1; i >= 0; i--) {
+            coefficients[i] = rhs[i] / lhs[i][i];
+            for (let k = i - 1; k >= 0; k--) {
+                rhs[k] -= lhs[k][i] * coefficients[i];
+            }
+        }
+        return coefficients;
+    }
+
+    function fitPolynomial(trainingPoints, degree) {
+        let n = degree + 1;
+        if (trainingPoints.length < n) return null;
+
+        let X = Array(n).fill(0).map(() => Array(n).fill(0));
+        let Y = Array(n).fill(0);
+
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                let sumX = 0;
+                trainingPoints.forEach(p => sumX += Math.pow(p.x, i + j));
+                X[i][j] = sumX;
+            }
+            let sumY = 0;
+            trainingPoints.forEach(p => sumY += p.y * Math.pow(p.x, i));
+            Y[i] = sumY;
+        }
+        try { return solveLeastSquares(X, Y); } catch(e) { return null; }
+    }
+
+    function evaluatePoly(coeffs, x) {
+        if(!coeffs) return 0;
+        return coeffs.reduce((sum, coef, i) => sum + coef * Math.pow(x, i), 0);
+    }
+
+    // Comprehensive numeric core metric evaluations
+    function calculateMetricsNumeric(subsetPoints, coeffs) {
+        if (!subsetPoints.length || !coeffs) {
+            return { mse: 0, mape: 0, r2: 0 };
+        }
+
+        let sumSqRes = 0;
+        let sumAbsPctErr = 0;
+        let sumY = 0;
+
+        subsetPoints.forEach(p => {
+            let predY = evaluatePoly(coeffs, p.x);
+            let res = p.y - predY;
+            sumSqRes += res * res;
+            sumAbsPctErr += Math.abs(res / p.y);
+            sumY += p.y;
+        });
+
+        let mse = sumSqRes / subsetPoints.length / 1000;
+        let mape = (sumAbsPctErr / subsetPoints.length) * 100;
+
+        let meanY = sumY / subsetPoints.length;
+        let sumSqTot = 0;
+        subsetPoints.forEach(p => {
+            sumSqTot += Math.pow(p.y - meanY, 2);
+        });
+
+        let r2 = sumSqTot > 0 ? (1 - (sumSqRes / sumSqTot)) : 0;
+
+        return { mse, mape, r2 };
+    }
+
+    // --- MAIN ENGINE RENDER LOOP ---
+    function update() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw Gridlines
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
+        for(let i=50; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+        for(let i=50; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+        if (points.length === 0) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("Click anywhere to plot data points or click 'Generate Noisy Sine Wave'", canvas.width/2, canvas.height/2);
+            trainErrorEl.innerText = "0.00";
+            testErrorEl.innerText = "0.00";
+            trainMapeEl.innerText = "0.0%";
+            testMapeEl.innerText = "0.0%";
+            trainR2El.innerText = "0.00";
+            testR2El.innerText = "0.00";
+            return;
+        }
+
+        const degree = parseInt(degreeSlider.value);
+        
+        if (isCvMode) {
+            // --- CROSS VALIDATION METRICS EXECUTION ENGINE ---
+            let totalTrainMSE = 0, totalTrainMAPE = 0, totalTrainR2 = 0;
+            let totalValMSE = 0, totalValMAPE = 0, totalValR2 = 0;
+            let validFoldsCount = 0;
+
+            for (let f = 1; f <= 5; f++) {
+                let cvTrainPoints = points.filter(p => p.fold !== f);
+                let cvValPoints = points.filter(p => p.fold === f);
+
+                let cvCoeffs = fitPolynomial(cvTrainPoints, degree);
+                
+                if (cvCoeffs) {
+                    validFoldsCount++;
+                    
+                    let trainM = calculateMetricsNumeric(cvTrainPoints, cvCoeffs);
+                    let valM = calculateMetricsNumeric(cvValPoints, cvCoeffs);
+
+                    totalTrainMSE += trainM.mse;
+                    totalTrainMAPE += trainM.mape;
+                    totalTrainR2 += trainM.r2;
+
+                    totalValMSE += valM.mse;
+                    totalValMAPE += valM.mape;
+                    totalValR2 += valM.r2;
+
+                    // Update fold split row label indicators visually with current fold validation score maps
+                    let rowLabel = document.querySelector(`.cv-row:nth-child(${f}) .cv-label`);
+                    if (rowLabel) {
+                        rowLabel.innerText = `Fold ${f} (${valM.mse.toFixed(2)})`;
+                    }
+                }
+            }
+
+            if (validFoldsCount > 0) {
+                trainErrorEl.innerText = (totalTrainMSE / validFoldsCount).toFixed(2);
+                trainMapeEl.innerText = (totalTrainMAPE / validFoldsCount).toFixed(1) + "%";
+                trainR2El.innerText = (totalTrainR2 / validFoldsCount).toFixed(2);
+
+                testErrorEl.innerText = (totalValMSE / validFoldsCount).toFixed(2);
+                testMapeEl.innerText = (totalValMAPE / validFoldsCount).toFixed(1) + "%";
+                testR2El.innerText = (totalValR2 / validFoldsCount).toFixed(2);
+            }
+
+            // Fit main drawing curve line using only the active fold view database elements setup
+            let activeTrainPoints = points.filter(p => p.fold !== currentFold);
+            const activeCoeffs = fitPolynomial(activeTrainPoints, degree);
+
+            if (activeCoeffs) {
+                ctx.beginPath();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#2563eb';
+                for (let x = 0; x <= canvas.width; x += 2) {
+                    let y = evaluatePoly(activeCoeffs, x);
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+        } else {
+            // --- STANDARD HOLD-OUT METRICS MODULE ---
+            let trainPoints = [];
+            let testPoints = [];
+
+            points.forEach((p, idx) => {
+                if (idx % 5 === 0) testPoints.push(p);
+                else trainPoints.push(p);
+            });
+
+            // Clear configuration cross validation markers
+            document.querySelectorAll('.cv-label').forEach((lbl, i) => lbl.innerText = `Split ${i+1}`);
+
+            const coeffs = fitPolynomial(trainPoints, degree);
+
+            if (coeffs) {
+                ctx.beginPath();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#2563eb';
+                for (let x = 0; x <= canvas.width; x += 2) {
+                    let y = evaluatePoly(coeffs, x);
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            let trainM = calculateMetricsNumeric(trainPoints, coeffs);
+            let testM = calculateMetricsNumeric(testPoints, coeffs);
+
+            trainErrorEl.innerText = trainM.mse.toFixed(2);
+            trainMapeEl.innerText = trainM.mape.toFixed(1) + "%";
+            trainR2El.innerText = trainM.r2.toFixed(2);
+
+            testErrorEl.innerText = testM.mse.toFixed(2);
+            testMapeEl.innerText = testM.mape.toFixed(1) + "%";
+            testR2El.innerText = testM.r2.toFixed(2);
+        }
+
+        // Draw Data Points on Map
+        points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
+            
+            if (isCvMode) {
+                if (p.fold === currentFold) {
+                    ctx.fillStyle = '#ef4444'; // Red Validation
+                    ctx.strokeStyle = '#b91c1c';
+                } else {
+                    ctx.fillStyle = '#3b82f6'; // Blue Training
+                    ctx.strokeStyle = '#1d4ed8';
+                }
+            } else {
+                if (points.indexOf(p) % 5 === 0) {
+                    ctx.fillStyle = '#ef4444'; // Test
+                    ctx.strokeStyle = '#b91c1c';
+                } else {
+                    ctx.fillStyle = '#3b82f6'; // Train
+                    ctx.strokeStyle = '#1d4ed8';
+                }
+            }
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            if(isCvMode) {
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "9px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(p.fold, p.x, p.y + 3);
+            }
+        });
+    }
+
+    setTimeout(() => {
+        resizeCanvas();
+        generateDemoData();
+    }, 100);
+</script>
+</body>
+</html>

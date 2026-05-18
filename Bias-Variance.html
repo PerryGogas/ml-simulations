@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bias-Variance Tradeoff Interactive Simulator</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bias-color: #eab308;
+            --variance-color: #10b981;
+            --total-color: #ef4444;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1000px) {
+            .main-layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* 2x2 Dartboard Grid Layout */
+        .dartboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .board-container.active {
+            border-color: var(--primary);
+            background: #eff6ff;
+            transform: scale(1.02);
+        }
+
+        .board-title {
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+            text-align: center;
+        }
+
+        .board-subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .dartboard {
+            width: 180px;
+            height: 180px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #cbd5e1;
+        }
+
+        /* Concentric Rings */
+        .ring {
+            border: 2px solid #94a3b8;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-sizing: border-box;
+        }
+        .ring-1 { width: 100%; height: 100%; background-color: #f8fafc; }
+        .ring-2 { width: 75%; height: 75%; background-color: #f1f5f9; }
+        .ring-3 { width: 50%; height: 50%; background-color: #e2e8f0; }
+        .ring-4 { width: 20%; height: 20%; background-color: #ef4444; } /* Bullseye */
+
+        .dart {
+            width: 6px;
+            height: 6px;
+            background: #1e293b;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+
+        /* Controls Panel Stack */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        label { font-weight: 700; font-size: 0.9rem; }
+        
+        .slider-container {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
+        /* Curve Graph Canvas */
+        .graph-container {
+            position: relative;
+            width: 100%;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 220px;
+        }
+
+        /* Legendary Box markers */
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .leg-item { display: flex; align-items: center; gap: 4px; }
+        .leg-line { width: 15px; height: 3px; display: inline-block; }
+
+        .explainer-box {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Bias-Variance Tradeoff Dashboard</h1>
+        <p>An interactive dartboard visualizer showcasing model errors vs complexity.</p>
+    </header>
+
+    <div class="main-layout">
+        <!-- LEFT PANEL: The 4 Dartboards -->
+        <div class="card dartboard-grid">
+            
+            <!-- Top Left: High Bias, Low Variance -->
+            <div class="board-container" id="board-hblv">
+                <div class="board-title">High Bias / Low Variance</div>
+                <div class="board-subtitle">Underfitting (Simple Model)</div>
+                <div class="dartboard" id="db-hblv">
+                    <div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="ring ring-4"></div>
+                </div>
+            </div>
+
+            <!-- Top Right: High Bias, High Variance -->
+            <div class="board-container" id="board-hbhv">
+                <div class="board-title">High Bias / High Variance</div>
+                <div class="board-subtitle">Worst Case Scenario</div>
+                <div class="dartboard" id="db-hbhv">
+                    <div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="ring ring-4"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Left: Low Bias, Low Variance -->
+            <div class="board-container" id="board-lblv">
+                <div class="board-title">Low Bias / Low Variance</div>
+                <div class="board-subtitle">The Ideal "Sweet Spot"</div>
+                <div class="dartboard" id="db-lblv">
+                    <div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="ring ring-4"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Right: Low Bias, High Variance -->
+            <div class="board-container" id="board-lbhv">
+                <div class="board-title">Low Bias / High Variance</div>
+                <div class="board-subtitle">Overfitting (Complex Model)</div>
+                <div class="dartboard" id="db-lbhv">
+                    <div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="ring ring-4"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT PANEL: Controls & Live Error Tracking Graphs -->
+        <div class="right-panel">
+            
+            <!-- Slider Control -->
+            <div class="card control-group">
+                <label for="complexitySlider">Model Complexity (Flexibility)</label>
+                <div class="slider-container">
+                    <input type="range" id="complexitySlider" min="0" max="100" value="15">
+                    <div class="slider-labels">
+                        <span>Low Complexity<br>(e.g., Linear)</span>
+                        <span style="text-align: center; color: var(--primary);">Optimal</span>
+                        <span style="text-align: right;">High Complexity<br>(e.g., Deep Tree)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Tradeoff Mathematical Graph -->
+            <div class="card">
+                <label>Error Tradeoff Curve Matrix</label>
+                <div class="graph-container">
+                    <canvas id="graphCanvas"></canvas>
+                </div>
+                <div class="legend">
+                    <div class="leg-item"><span class="leg-line" style="background:var(--bias-color)"></span> Bias²</div>
+                    <div class="leg-item"><span class="leg-line" style="background:var(--variance-color)"></span> Variance</div>
+                    <div class="leg-item"><span class="leg-line" style="background:var(--total-color)"></span> Total Error</div>
+                </div>
+            </div>
+
+            <!-- Context Dynamic Explainer text box -->
+            <div class="card explainer-box" id="statusExplainer">
+                Move the slider to start analyzing real-time variations!
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    const slider = document.getElementById('complexitySlider');
+    const explainer = document.getElementById('statusExplainer');
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Handle high DPI display calibration for HTML5 Canvas
+    function setupCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr;
+        canvas.height = 220 * dpr;
+        ctx.scale(dpr, dpr);
+    }
+
+    // Static Data Matrices generating the Error Curve
+    const samples = 100;
+    function getMetrics(x) {
+        // x scales natively 0 to 1
+        const pct = x / samples;
+        
+        // Mathematical functions modeling the errors standard curves
+        const biasSq = Math.pow(1 - pct, 2.5) * 130 + 10;
+        const variance = Math.pow(pct, 2) * 130 + 10;
+        const irreducibleError = 25; // Base noise floor
+        const totalError = biasSq + variance + irreducibleError;
+
+        return { biasSq, variance, totalError, xPos: pct };
+    }
+
+    // Generate fixed random distributions for the dart hits so they map reliably
+    const seedPoints = Array.from({ length: 12 }, () => ({
+        angle: Math.random() * Math.PI * 2,
+        rSpread: Math.random()
+    }));
+
+    function updateDarts(complexity) {
+        // Clear old dart elements from boards
+        document.querySelectorAll('.dart').forEach(el => el.remove());
+
+        // Target Board States Calculations 
+        // 1. Underfitting state (Low Complexity) -> Maps to high bias, low variance
+        // 2. Overfitting state (High Complexity) -> Maps to low bias, high variance
+        // 3. Optimal sweetspot -> Low bias, low variance
+        
+        // We will compute parameters dynamically mapped across all fields
+        const biasFactor = Math.pow(1 - (complexity / 100), 2); // 1 at low complexity, 0 at high
+        const varianceFactor = Math.pow(complexity / 100, 2);   // 0 at low complexity, 1 at high
+
+        const configurations = [
+            {
+                id: 'db-hblv', cardId: 'board-hblv',
+                centerDist: 55, // Off-center (High Bias)
+                spread: 12,     // Tight cluster (Low Variance)
+                activeRange: complexity <= 30
+            },
+            {
+                id: 'db-hbhv', cardId: 'board-hbhv',
+                centerDist: 55, // Off-center (High Bias)
+                spread: 45,     // Scattered (High Variance)
+                activeRange: false // Poor model constant fallback
+            },
+            {
+                id: 'db-lblv', cardId: 'board-lblv',
+                centerDist: 8 * biasFactor,     // Accurate centering (Low Bias)
+                spread: 10 + 35 * varianceFactor, // Tight when variance low
+                activeRange: complexity > 30 && complexity < 65
+            },
+            {
+                id: 'db-lbhv', cardId: 'board-lbhv',
+                centerDist: 5,  // Centered on average (Low Bias)
+                spread: 50,     // Wildly scattered (High Variance)
+                activeRange: complexity >= 65
+            }
+        ];
+
+        configurations.forEach(config => {
+            const board = document.getElementById(config.id);
+            const card = document.getElementById(config.cardId);
+            
+            // Highlight active contextual container card
+            if (config.activeRange) {
+                card.classList.add('active');
+            } else {
+                card.classList.remove('active');
+            }
+
+            // Render operational darts inside the DOM layout
+            seedPoints.forEach(pt => {
+                const dart = document.createElement('div');
+                dart.className = 'dart';
+
+                // Offset calculating bias vectors
+                const biasAngle = 0.75 * Math.PI; // Fixed direction displacement for bias
+                const bx = Math.cos(biasAngle) * config.centerDist;
+                const by = Math.sin(biasAngle) * config.centerDist;
+
+                // Random distribution cluster for variance spread mapping
+                const vx = Math.cos(pt.angle) * (pt.rSpread * config.spread);
+                const vy = Math.sin(pt.angle) * (pt.rSpread * config.spread);
+
+                // Absolute percentage assignment coordinates relative to parent board center (50%)
+                const posX = 50 + ((bx + vx) / 180) * 100;
+                const posY = 50 + ((by + vy) / 180) * 100;
+
+                dart.style.left = `${posX}%`;
+                dart.style.top = `${posY}%`;
+                board.appendChild(dart);
+            });
+        });
+    }
+
+    function drawGraph(activeComplexity) {
+        const w = canvas.offsetWidth;
+        const h = 220;
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw Axes lines
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(35, 10);
+        ctx.lineTo(35, h - 30);
+        ctx.lineTo(w - 15, h - 30);
+        ctx.stroke();
+
+        // Label Axes headings
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('ERROR', 5, 15);
+        ctx.textAlign = 'center';
+        ctx.fillText('MODEL COMPLEXITY', w / 2, h - 10);
+
+        // Map operational tracking coordinate loops
+        function getCanvasCoords(val, index) {
+            const metrics = getMetrics(index);
+            const x = 35 + (metrics.xPos * (w - 50));
+            // Invert scale to render y axis pointing vertically upwards safely
+            const y = (h - 30) - (metrics[val] / 200) * (h - 50);
+            return { x, y };
+        }
+
+        // Helper rendering mathematical curves gracefully
+        function renderCurve(type, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let i = 0; i <= samples; i++) {
+                const pt = getCanvasCoords(type, i);
+                if (i === 0) ctx.moveTo(pt.x, pt.y);
+                else ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke();
+        }
+
+        renderCurve('biasSq', '#eab308');   // Bias Squared curve
+        renderCurve('variance', '#10b981'); // Variance curve
+        renderCurve('totalError', '#ef4444'); // Total combined error curve
+
+        // Draw active dynamic complexity position indicator bar lines
+        const currentX = 35 + (activeComplexity / 100) * (w - 50);
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(currentX, 10);
+        ctx.lineTo(currentX, h - 30);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line formatting defaults
+
+        // Draw active intersection point indicator circles
+        const activeMetrics = getMetrics(activeComplexity);
+        ['biasSq', 'variance', 'totalError'].forEach(type => {
+            const yVal = (h - 30) - (activeMetrics[type] / 200) * (h - 50);
+            ctx.fillStyle = type === 'biasSq' ? '#eab308' : type === 'variance' ? '#10b981' : '#ef4444';
+            ctx.beginPath();
+            ctx.arc(currentX, yVal, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        });
+    }
+
+    function updateExplainerText(val) {
+        if (val <= 30) {
+            explainer.style.borderColor = "#eab308";
+            explainer.style.background = "#fffbeb";
+            explainer.innerHTML = `<strong>⚠️ Underfitting Zone (High Bias, Low Variance):</strong><br>
+            Your model is too simple (e.g., straight line on curved data). It makes strong assumptions, missing the target consistently but clustering tightly because it isn't sensitive to noise.`;
+        } else if (val >= 65) {
+            explainer.style.borderColor = "#10b981";
+            explainer.style.background = "#f0fdf4";
+            explainer.innerHTML = `<strong>⚠️ Overfitting Zone (Low Bias, High Variance):</strong><br>
+            Your model is overly complex (e.g., high-degree polynomial). It memorizes noise in the training set. On average it centers around the target, but single predictions fly everywhere.`;
+        } else {
+            explainer.style.borderColor = "#2563eb";
+            explainer.style.background = "#eff6ff";
+            explainer.innerHTML = `<strong>🎯 The Optimal Sweet Spot:</strong><br>
+            Total Error is minimized here! The model balances descriptive flexibility without starting to capture noise, yielding minimal overall generalization error.`;
+        }
+    }
+
+    // Synchronized orchestration execution updates
+    function syncLayout() {
+        const value = parseInt(slider.value);
+        updateDarts(value);
+        drawGraph(value);
+        updateExplainerText(value);
+    }
+
+    slider.addEventListener('input', syncLayout);
+    window.addEventListener('resize', () => { setupCanvas(); syncLayout(); });
+
+    // Bootstrap run sequencing on layout initialization
+    setupCanvas();
+    syncLayout();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agglomerative Hierarchical Clustering Visualizer</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr 340px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #dataWrapper { cursor: crosshair; }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 450px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        select {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        button:disabled {
+            background: #e2e8f0;
+            color: #94a3b8;
+            cursor: not-allowed;
+            border: none;
+        }
+
+        .status-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .history-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Hierarchical Clustering Playground</h1>
+        <p>Explore bottom-up Agglomerative Clustering and Dendrogram tree synthesis in real-time.</p>
+    </header>
+
+    <div class="layout">
+        <!-- Column 1: 2D Data Space Canvas -->
+        <div class="card">
+            <div class="panel-title">1. Data Space View</div>
+            <div class="canvas-container" id="dataWrapper">
+                <canvas id="dataCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Column 2: Dendrogram Graph Canvas -->
+        <div class="card">
+            <div class="panel-title">2. Dendrogram (Tree Diagram)</div>
+            <div class="canvas-container">
+                <canvas id="dendroCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Column 3: Control Center Matrix HUD -->
+        <div class="card controls">
+            <div class="control-group">
+                <label for="linkageSelect">Linkage Criterion</label>
+                <select id="linkageSelect">
+                    <option value="single">Single Linkage (Min Dist)</option>
+                    <option value="complete">Complete Linkage (Max Dist)</option>
+                    <option value="centroid">Centroid Linkage (Avg Center)</option>
+                </select>
+            </div>
+
+            <button id="btnGen" class="btn-secondary">Generate Sample Nodes</button>
+            
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin: 5px 0;">
+
+            <div class="control-group">
+                <label>Algorithmic Controls</label>
+                <button id="btnStep" class="btn-primary">Iterate: Merge Closest</button>
+                <button id="btnRun" class="btn-secondary" style="margin-top:5px;">Run Entire Tree</button>
+            </div>
+
+            <button id="btnClear" class="btn-danger">Clear Everything</button>
+
+            <div class="status-box" id="statusPanel">
+                <strong>Current Status: Setup</strong><br>
+                Click inside the 2D Data Space to add points manually, or load sample nodes to begin.
+            </div>
+
+            <div class="control-group">
+                <label style="font-size:0.8rem; color:#64748b; text-transform:uppercase;">Merge Execution History</label>
+                <div class="history-box" id="historyLog">No merges executed yet.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const dataCanvas = document.getElementById('dataCanvas');
+    const dctx = dataCanvas.getContext('2d');
+    const dendroCanvas = document.getElementById('dendroCanvas');
+    const tctx = dendroCanvas.getContext('2d');
+
+    const linkageSelect = document.getElementById('linkageSelect');
+    const btnGen = document.getElementById('btnGen');
+    const btnStep = document.getElementById('btnStep');
+    const btnRun = document.getElementById('btnRun');
+    const btnClear = document.getElementById('btnClear');
+    const statusPanel = document.getElementById('statusPanel');
+    const historyLog = document.getElementById('historyLog');
+
+    // Color palette pool mapped to clusters securely
+    const BASE_COLORS = [
+        '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#f97316', 
+        '#06b6d4', '#ec4899', '#eab308', '#14b8a6', '#6366f1'
+    ];
+
+    // Core Data Matrices State tracking engine
+    let originalPoints = []; // Fixed static positions array {id, x, y}
+    let activeClusters = [];  // Array of active cluster objects 
+    let mergeHistory = [];    // Tree linkages cache tracker
+    let initialCount = 0;
+
+    function resizeCanvases() {
+        dataCanvas.width = dataCanvas.offsetWidth;
+        dataCanvas.height = 450;
+        dendroCanvas.width = dendroCanvas.offsetWidth;
+        dendroCanvas.height = 450;
+        render();
+    }
+    window.addEventListener('resize', resizeCanvases);
+
+    // Math Helpers
+    function euclideanDistance(p1, p2) {
+        return Math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
+    }
+
+    // Dynamic Cluster generation algorithms
+    function generatePoints() {
+        resetEngine();
+        const rawCoordinates = [
+            {x: 0.2, y: 0.3}, {x: 0.22, y: 0.27}, {x: 0.25, y: 0.33}, // Cluster Alpha
+            {x: 0.7, y: 0.25}, {x: 0.75, y: 0.22},                   // Cluster Beta
+            {x: 0.5, y: 0.7}, {x: 0.53, y: 0.75}, {x: 0.47, y: 0.72}  // Cluster Gamma
+        ];
+
+        rawCoordinates.forEach((coord, i) => {
+            let p = {
+                id: i,
+                label: String.fromCharCode(65 + i), // Label nodes natively A, B, C...
+                x: coord.x * dataCanvas.width + (Math.random() * 10 - 5),
+                y: coord.y * dataCanvas.height + (Math.random() * 10 - 5)
+            };
+            originalPoints.push(p);
+            activeClusters.push({
+                id: p.id,
+                labels: [p.label],
+                pointsIndices: [p.id],
+                color: BASE_COLORS[i % BASE_COLORS.length]
+            });
+        });
+        initialCount = originalPoints.length;
+        updateUI();
+    }
+
+    dataCanvas.addEventListener('click', (e) => {
+        if(mergeHistory.length > 0) {
+            alert("Please clear or reset the board before adding new points to an active execution tree.");
+            return;
+        }
+        const rect = dataCanvas.getBoundingClientRect();
+        let i = originalPoints.length;
+        if(i >= 20) { alert("Maximum limit of 20 nodes reached for visibility clarity."); return; }
+        
+        let p = {
+            id: i,
+            label: String.fromCharCode(65 + i),
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        originalPoints.push(p);
+        activeClusters.push({
+            id: p.id,
+            labels: [p.label],
+            pointsIndices: [p.id],
+            color: BASE_COLORS[i % BASE_COLORS.length]
+        });
+        initialCount = originalPoints.length;
+        updateUI();
+    });
+
+    function resetEngine() {
+        originalPoints = [];
+        activeClusters = [];
+        mergeHistory = [];
+        initialCount = 0;
+        historyLog.innerText = "No merges executed yet.";
+        linkageSelect.disabled = false;
+        updateUI();
+    }
+
+    // Linkage Matrix Distance Resolvers
+    function getClusterDistance(c1, c2, criterion) {
+        let distances = [];
+        for(let idx1 of c1.pointsIndices) {
+            for(let idx2 of c2.pointsIndices) {
+                distances.push(euclideanDistance(originalPoints[idx1], originalPoints[idx2]));
+            }
+        }
+
+        if(criterion === 'single') return Math.min(...distances);
+        if(criterion === 'complete') return Math.max(...distances);
+        
+        if(criterion === 'centroid') {
+            // Find mathematical center averages
+            let avg1 = getCentroid(c1);
+            let avg2 = getCentroid(c2);
+            return euclideanDistance(avg1, avg2);
+        }
+    }
+
+    function getCentroid(cluster) {
+        let sumX = 0, sumY = 0;
+        cluster.pointsIndices.forEach(idx => {
+            sumX += originalPoints[idx].x;
+            sumY += originalPoints[idx].y;
+        });
+        return {
+            x: sumX / cluster.pointsIndices.length,
+            y: sumY / cluster.pointsIndices.length
+        };
+    }
+
+    // Step Engine Agglomeration Process
+    function mergeNextClosest() {
+        if(activeClusters.length <= 1) return false;
+        linkageSelect.disabled = true;
+
+        let minD = Infinity;
+        let c1Idx = -1, c2Idx = -1;
+        const criterion = linkageSelect.value;
+
+        // Exhaustive pairwise combination lookups
+        for(let i = 0; i < activeClusters.length; i++) {
+            for(let j = i + 1; j < activeClusters.length; j++) {
+                let dist = getClusterDistance(activeClusters[i], activeClusters[j], criterion);
+                if(dist < minD) {
+                    minD = dist;
+                    c1Idx = i;
+                    c2Idx = j;
+                }
+            }
+        }
+
+        if(c1Idx !== -1 && c2Idx !== -1) {
+            let c1 = activeClusters[c1Idx];
+            let c2 = activeClusters[c2Idx];
+
+            // Formulate composite node tracker
+            let mergedCluster = {
+                id: originalPoints.length + mergeHistory.length, 
+                labels: [...c1.labels, ...c2.labels],
+                pointsIndices: [...c1.pointsIndices, ...c2.pointsIndices],
+                color: c1.pointsIndices.length >= c2.pointsIndices.length ? c1.color : c2.color
+            };
+
+            // Capture logging state maps tracking proximity matrices conversions
+            mergeHistory.push({
+                parent: mergedCluster.id,
+                child1: c1,
+                child2: c2,
+                distance: minD
+            });
+
+            // Splice target structures from array maps
+            activeClusters = activeClusters.filter((_, idx) => idx !== c1Idx && idx !== c2Idx);
+            activeClusters.push(mergedCluster);
+
+            updateUI();
+            return true;
+        }
+        return false;
+    }
+
+    function runTreeToEnd() {
+        let running = true;
+        while(running && activeClusters.length > 1) {
+            running = mergeNextClosest();
+        }
+    }
+
+    // Graphics Visualization Render Framework Pipeline
+    function render() {
+        dctx.clearRect(0, 0, dataCanvas.width, dataCanvas.height);
+        tctx.clearRect(0, 0, dendroCanvas.width, dendroCanvas.height);
+
+        if (originalPoints.length === 0) {
+            dctx.fillStyle = '#94a3b8'; dctx.font = '15px sans-serif'; dctx.textAlign = 'center';
+            dctx.fillText("Click here to add custom nodes or click 'Generate Sample Nodes'", dataCanvas.width/2, dataCanvas.height/2);
+            tctx.fillStyle = '#94a3b8'; tctx.font = '15px sans-serif'; tctx.textAlign = 'center';
+            tctx.fillText("Tree architecture map renders here automatically.", dendroCanvas.width/2, dendroCanvas.height/2);
+            return;
+        }
+
+        // 1. DATA SPACE CANVAS RENDER
+        // Render bounding hulls circles enclosing multi-node clusters
+        activeClusters.forEach(cluster => {
+            if(cluster.pointsIndices.length > 1) {
+                let center = getCentroid(cluster);
+                let maxR = 0;
+                cluster.pointsIndices.forEach(idx => {
+                    let d = euclideanDistance(center, originalPoints[idx]);
+                    if(d > maxR) maxR = d;
+                });
+                
+                dctx.beginPath();
+                dctx.arc(center.x, center.y, maxR + 15, 0, Math.PI * 2);
+                dctx.fillStyle = cluster.color + '15'; // Soft alpha backdrop
+                dctx.fill();
+                dctx.strokeStyle = cluster.color;
+                dctx.lineWidth = 1.5;
+                dctx.setLineDash([4, 4]);
+                dctx.stroke();
+                dctx.setLineDash([]);
+            }
+        });
+
+        // Draw individual static point elements
+        originalPoints.forEach(p => {
+            dctx.beginPath();
+            dctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+            
+            // Find which cluster currently owns this specific node
+            let owner = activeClusters.find(c => c.pointsIndices.includes(p.id));
+            dctx.fillStyle = owner ? owner.color : '#cbd5e1';
+            dctx.fill();
+            dctx.strokeStyle = '#ffffff'; dctx.lineWidth = 1.5; dctx.stroke();
+
+            // Label text overheads
+            dctx.fillStyle = '#1e293b'; dctx.font = 'bold 11px sans-serif'; dctx.textAlign = 'center';
+            dctx.fillText(p.label, p.x, p.y - 12);
+        });
+
+
+        // 2. DENDROGRAM CANVAS RENDER TREE
+        // Set leaf nodes horizontal positions linearly
+        let leafMap = {};
+        const spacing = dendroCanvas.width / (initialCount + 1);
+        
+        // Build flat layout execution list sorting by initial array structures tracking indices
+        let sortedLeaves = [...originalPoints].map(p => p.label);
+        
+        sortedLeaves.forEach((lbl, index) => {
+            leafMap[lbl] = spacing * (index + 1);
+            // Label leaves along base axis floor grid
+            tctx.fillStyle = '#475569'; tctx.font = 'bold 11px sans-serif'; tctx.textAlign = 'center';
+            tctx.fillText(lbl, leafMap[lbl], dendroCanvas.height - 15);
+        });
+
+        // Track running branch coordinate conversions
+        let nodeXMap = {...leafMap};
+        let maxDistance = Math.max(...mergeHistory.map(h => h.distance), 10);
+        const plotHeightRange = dendroCanvas.height - 60;
+
+        mergeHistory.forEach(historyItem => {
+            // Compute coordinate layout tracks mappings
+            // X coordinates are found by calculating the averages of child branches
+            let label1 = historyItem.child1.labels.join('');
+            let label2 = historyItem.child2.labels.join('');
+            let parentLabel = historyItem.parent;
+
+            let x1 = getClusterX(historyItem.child1, nodeXMap);
+            let x2 = getClusterX(historyItem.child2, nodeXMap);
+            let parentX = (x1 + x2) / 2;
+            nodeXMap[parentLabel] = parentX; // Cache position conversion maps
+
+            // Map distances scaling height thresholds vertically
+            let h1 = dendroCanvas.height - 30 - (getHistoryItemDistance(historyItem.child1.id) / maxDistance) * plotHeightRange;
+            let h2 = dendroCanvas.height - 30 - (getHistoryItemDistance(historyItem.child2.id) / maxDistance) * plotHeightRange;
+            let parentH = dendroCanvas.height - 30 - (historyItem.distance / maxDistance) * plotHeightRange;
+
+            // Draw bridge connections
+            tctx.strokeStyle = '#64748b'; tctx.lineWidth = 2;
+            tctx.beginPath();
+            tctx.moveTo(x1, h1); tctx.lineTo(x1, parentH); // Left riser
+            tctx.lineTo(x2, parentH);                    // Top horizontal bar bridge
+            tctx.lineTo(x2, h2);                          // Right riser
+            tctx.stroke();
+
+            // Label height thresholds metrics directly above bar center point
+            tctx.fillStyle = '#0284c7'; tctx.font = '9px monospace'; tctx.textAlign = 'center';
+            tctx.fillText(historyItem.distance.toFixed(1), parentX, parentH - 4);
+        });
+    }
+
+    function getClusterX(cluster, nodeXMap) {
+        if(cluster.labels.length === 1) return nodeXMap[cluster.labels[0]];
+        // Else search structural cache mappings tracking indices signatures
+        return nodeXMap[cluster.id] || 0;
+    }
+
+    function getHistoryItemDistance(clusterId) {
+        let match = mergeHistory.find(h => h.parent === clusterId);
+        return match ? match.distance : 0;
+    }
+
+    // UI Panel Matrix state trackers updates
+    function updateUI() {
+        if (originalPoints.length === 0) {
+            btnStep.disabled = true; btnRun.disabled = true;
+        } else if (activeClusters.length <= 1) {
+            btnStep.disabled = true; btnRun.disabled = true;
+            statusPanel.innerHTML = `<strong>🎯 Process Complete!</strong> All nodes have merged into a single overarching root structure tree. View the full Dendrogram history tracking log matrix.`;
+        } else {
+            btnStep.disabled = false; btnRun.disabled = false;
+            statusPanel.innerHTML = `<strong>Active Clusters Pool: ${activeClusters.length} / ${initialCount}</strong><br>Click 'Iterate' to search, find, and merge the closest pair of clusters using the chosen linkage metric.`;
+        }
+
+        // Display text matrix logging arrays
+        if(mergeHistory.length > 0) {
+            historyLog.innerHTML = mergeHistory.map((h, i) => {
+                return `[Step ${i+1}]: Merged {${h.child1.labels.join(',')}} + {${h.child2.labels.join(',')}} (Dist: ${h.distance.toFixed(2)})<br>`;
+            }).join('');
+            historyLog.scrollTop = historyLog.scrollHeight; // Auto Scroll logs
+        }
+
+        render();
+    }
+
+    btnGen.addEventListener('click', generatePoints);
+    btnStep.addEventListener('click', mergeNextClosest);
+    btnRun.addEventListener('click', runTreeToEnd);
+    btnClear.addEventListener('click', resetEngine);
+
+    // Initial Bootstrap run configuration sequence
+    setTimeout(() => {
+        resizeCanvases();
+        generatePoints();
+    }, 100);
+</script>
+</body>
+</html>

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logistic Regression & Classification Metrics Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            max-width: 1150px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 30px;
+        }
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        .value-display {
+            float: right;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+        .metric-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-top: 4px solid #007bff;
+        }
+        .metric-card.accuracy { border-top-color: #28a745; }
+        .metric-card.sensitivity { border-top-color: #17a2b8; }
+        .metric-card.specificity { border-top-color: #ffc107; }
+        .metric-card.precision { border-top-color: #6f42c1; }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .viz-container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+            min-height: 400px;
+        }
+        .chart-box {
+            position: relative;
+            background: #fff;
+            padding: 10px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        .matrix-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        .confusion-matrix {
+            display: grid;
+            grid-template-columns: auto 95px 95px 75px;
+            grid-template-rows: auto 95px 95px 75px;
+            gap: 4px;
+            margin-top: 15px;
+            text-align: center;
+            align-items: stretch;
+        }
+        .matrix-cell {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #f1f3f5;
+            border-radius: 4px;
+            font-weight: bold;
+            box-sizing: border-box;
+        }
+        .matrix-cell .label {
+            font-size: 11px;
+            font-weight: normal;
+            color: #6c757d;
+        }
+        .matrix-cell .pct {
+            font-size: 11px;
+            font-weight: normal;
+            color: inherit;
+            opacity: 0.85;
+        }
+        .matrix-header-x {
+            grid-column: span 2;
+            font-weight: bold;
+            padding-bottom: 5px;
+            align-self: center;
+        }
+        .matrix-label-y {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            padding-right: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        .matrix-total-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #495057;
+            font-size: 15px;
+        }
+        .tp { background-color: #d4edda; color: #155724; }
+        .tn { background-color: #d4edda; color: #155724; }
+        .fp { background-color: #f8d7da; color: #721c24; }
+        .fn { background-color: #f8d7da; color: #721c24; }
+        
+        .btn-reset {
+            width: 100%;
+            padding: 10px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .btn-reset:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Interactive Logistic Regression & Classification Dashboard</h1>
+    
+    <div class="main-layout">
+        <!-- Controls Sidebar -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="threshold">Classification Threshold <span id="threshold-val" class="value-display">0.50</span></label>
+                <input type="range" id="threshold" min="0.01" max="0.99" step="0.01" value="0.50">
+            </div>
+            <div class="control-group">
+                <label for="slope">Slope ($\beta_1$) <span id="slope-val" class="value-display">2.0</span></label>
+                <input type="range" id="slope" min="-5.0" max="5.0" step="0.2" value="2.0">
+            </div>
+            <div class="control-group">
+                <label for="intercept">Intercept ($\beta_0$) <span id="intercept-val" class="value-display">0.0</span></label>
+                <input type="range" id="intercept" min="-5.0" max="5.0" step="0.2" value="0.0">
+            </div>
+            <div class="control-group">
+                <label for="noise">Data Separability (Noise) <span id="noise-val" class="value-display">0.5</span></label>
+                <input type="range" id="noise" min="0.1" max="2.0" step="0.1" value="0.5">
+            </div>
+            <button class="btn-reset" id="regenerate-btn">Regenerate Data</button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard">
+            <!-- Metrics Top Bar -->
+            <div class="metrics-grid">
+                <div class="metric-card accuracy">
+                    <div>Accuracy</div>
+                    <div id="accuracy-metric" class="metric-value">0.0%</div>
+                </div>
+                <div class="metric-card sensitivity">
+                    <div>Sensitivity (Recall)</div>
+                    <div id="sensitivity-metric" class="metric-value">0.0%</div>
+                </div>
+                <div class="metric-card specificity">
+                    <div>Specificity</div>
+                    <div id="specificity-metric" class="metric-value">0.0%</div>
+                </div>
+                <div class="metric-card precision">
+                    <div>Precision</div>
+                    <div id="precision-metric" class="metric-value">0.0%</div>
+                </div>
+            </div>
+
+            <!-- Visualization Area -->
+            <div class="viz-container">
+                <div class="chart-box">
+                    <canvas id="logitChart"></canvas>
+                </div>
+                
+                <div class="matrix-box">
+                    <h3 style="margin: 0; color: #2c3e50;">Confusion Matrix</h3>
+                    <div class="confusion-matrix">
+                        <!-- Headers row 1 -->
+                        <div></div>
+                        <div class="matrix-header-x">Predicted</div>
+                        <div></div>
+                        
+                        <!-- Headers row 2 -->
+                        <div></div>
+                        <div style="font-size: 12px; font-weight: bold; color: #495057; align-self: end; padding-bottom: 5px;">Positive (1)</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #495057; align-self: end; padding-bottom: 5px;">Negative (0)</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #495057; align-self: end; padding-bottom: 5px;">Total</div>
+                        
+                        <!-- Actual Positive Row -->
+                        <div class="matrix-label-y">Actual Positive (1)</div>
+                        <div class="matrix-cell tp" id="cm-tp">0<div class="pct">0.0%</div><div class="label">TP</div></div>
+                        <div class="matrix-cell fn" id="cm-fn">0<div class="pct">0.0%</div><div class="label">FN</div></div>
+                        <div class="matrix-total-cell" id="cm-row1-total">0</div>
+                        
+                        <!-- Actual Negative Row -->
+                        <div class="matrix-label-y">Actual Negative (0)</div>
+                        <div class="matrix-cell fp" id="cm-fp">0<div class="pct">0.0%</div><div class="label">FP</div></div>
+                        <div class="matrix-cell tn" id="cm-tn">0<div class="pct">0.0%</div><div class="label">TN</div></div>
+                        <div class="matrix-total-cell" id="cm-row2-total">0</div>
+
+                        <!-- Column Totals Row -->
+                        <div class="matrix-total-label">Total</div>
+                        <div class="matrix-total-cell" id="cm-col1-total">0</div>
+                        <div class="matrix-total-cell" id="cm-col2-total">0</div>
+                        <div class="matrix-total-cell" id="cm-grand-total" style="background-color: #ced4da; color: #212529;">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configuration and Global State
+    const numPoints = 150;
+    let dataset = [];
+    let chartInstance = null;
+
+    // DOM Elements
+    const thresholdSlider = document.getElementById('threshold');
+    const slopeSlider = document.getElementById('slope');
+    const interceptSlider = document.getElementById('intercept');
+    const noiseSlider = document.getElementById('noise');
+
+    const thresholdVal = document.getElementById('threshold-val');
+    const slopeVal = document.getElementById('slope-val');
+    const interceptVal = document.getElementById('intercept-val');
+    const noiseVal = document.getElementById('noise-val');
+
+    const regenerateBtn = document.getElementById('regenerate-btn');
+
+    // Sigmoid function
+    function sigmoid(z) {
+        return 1 / (1 + Math.exp(-z));
+    }
+
+    // Generate Synthetic Data
+    function generateData() {
+        dataset = [];
+        const noiseLevel = parseFloat(noiseSlider.value);
+        
+        for (let i = 0; i < numPoints; i++) {
+            // Predictor variable X spread between -4 and 4
+            const x = (Math.random() - 0.5) * 8; 
+            
+            // True latent relationship (using a fixed base structure to keep it stable across slider edits)
+            const trueZ = 1.5 * x + (Math.random() - 0.5) * noiseLevel * 5;
+            const prob = sigmoid(trueZ);
+            
+            // Assign actual binary outcome
+            const y = Math.random() < prob ? 1 : 0;
+            
+            dataset.push({ x: x, y: y });
+        }
+    }
+
+    // Calculate Performance Metrics and Confusion Matrix
+    function updateSimulation() {
+        const threshold = parseFloat(thresholdSlider.value);
+        const b1 = parseFloat(slopeSlider.value);
+        const b0 = parseFloat(interceptSlider.value);
+
+        // Update slider value labels
+        thresholdVal.textContent = threshold.toFixed(2);
+        slopeVal.textContent = b1.toFixed(1);
+        interceptVal.textContent = b0.toFixed(1);
+        noiseVal.textContent = noiseSlider.value;
+
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+        let scatteredData = [];
+
+        // Evaluate predictions
+        dataset.forEach(point => {
+            const z = b0 + b1 * point.x;
+            const predProb = sigmoid(z);
+            const predY = predProb >= threshold ? 1 : 0;
+
+            if (point.y === 1 && predY === 1) tp++;
+            else if (point.y === 0 && predY === 0) tn++;
+            else if (point.y === 0 && predY === 1) fp++;
+            else if (point.y === 1 && predY === 0) fn++;
+
+            scatteredData.push({
+                x: point.x,
+                y: point.y,
+                prob: predProb
+            });
+        });
+
+        // Compute metrics
+        const total = tp + tn + fp + fn;
+        const accuracy = total > 0 ? (tp + tn) / total : 0;
+        const sensitivity = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+        const specificity = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+        const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+
+        // Calculate percentages as % of actual classes (denominators are row totals)
+        const totalActualPositive = tp + fn;
+        const totalActualNegative = fp + tn;
+        const totalPredPositive = tp + fp;
+        const totalPredNegative = fn + tn;
+
+        const tpPct = totalActualPositive > 0 ? (tp / totalActualPositive * 100).toFixed(1) : '0.0';
+        const fnPct = totalActualPositive > 0 ? (fn / totalActualPositive * 100).toFixed(1) : '0.0';
+        const fpPct = totalActualNegative > 0 ? (fp / totalActualNegative * 100).toFixed(1) : '0.0';
+        const tnPct = totalActualNegative > 0 ? (tn / totalActualNegative * 100).toFixed(1) : '0.0';
+
+        // Update DOM metrics display
+        document.getElementById('accuracy-metric').textContent = (accuracy * 100).toFixed(1) + '%';
+        document.getElementById('sensitivity-metric').textContent = (sensitivity * 100).toFixed(1) + '%';
+        document.getElementById('specificity-metric').textContent = (specificity * 100).toFixed(1) + '%';
+        document.getElementById('precision-metric').textContent = (precision * 100).toFixed(1) + '%';
+
+        // Update Confusion Matrix Data Cells
+        document.getElementById('cm-tp').innerHTML = `${tp}<div class="pct">${tpPct}%</div><div class="label">TP</div>`;
+        document.getElementById('cm-tn').innerHTML = `${tn}<div class="pct">${tnPct}%</div><div class="label">TN</div>`;
+        document.getElementById('cm-fp').innerHTML = `${fp}<div class="pct">${fpPct}%</div><div class="label">FP</div>`;
+        document.getElementById('cm-fn').innerHTML = `${fn}<div class="pct">${fnPct}%</div><div class="label">FN</div>`;
+
+        // Update Row, Column, and Grand Totals
+        document.getElementById('cm-row1-total').textContent = totalActualPositive;
+        document.getElementById('cm-row2-total').textContent = totalActualNegative;
+        document.getElementById('cm-col1-total').textContent = totalPredPositive;
+        document.getElementById('cm-col2-total').textContent = totalPredNegative;
+        document.getElementById('cm-grand-total').textContent = total;
+
+        // Generate Sigmoid Curve Line Data
+        let curveData = [];
+        for (let x = -4; x <= 4; x += 0.1) {
+            curveData.push({ x: x, y: sigmoid(b0 + b1 * x) });
+        }
+
+        // Generate Decision Boundary Line Data
+        let boundaryData = [];
+        // Solves for x: threshold = 1 / (1 + exp(-(b0 + b1*x)))
+        if (b1 !== 0) {
+            const boundaryX = (Math.log(threshold / (1 - threshold)) - b0) / b1;
+            if (boundaryX >= -4 && boundaryX <= 4) {
+                boundaryData = [{ x: boundaryX, y: 0 }, { x: boundaryX, y: 1 }];
+            }
+        }
+
+        // Update Chart
+        updateChart(scatteredData, curveData, boundaryData, threshold);
+    }
+
+    // Initialize ChartJS Visual
+    function updateChart(scatteredData, curveData, boundaryData, threshold) {
+        const ctx = document.getElementById('logitChart').getContext('2d');
+
+        const class0Data = scatteredData.filter(d => d.y === 0).map(d => ({ x: d.x, y: d.y }));
+        const class1Data = scatteredData.filter(d => d.y === 1).map(d => ({ x: d.x, y: d.y }));
+
+        if (chartInstance) {
+            chartInstance.data.datasets[0].data = class0Data;
+            chartInstance.data.datasets[1].data = class1Data;
+            chartInstance.data.datasets[2].data = curveData;
+            chartInstance.data.datasets[3].data = boundaryData;
+            chartInstance.data.datasets[4].data = [{ x: -4, y: threshold }, { x: 4, y: threshold }];
+            chartInstance.update('none'); // Update without animation for real-time responsiveness
+        } else {
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Actual Class 0',
+                            data: class0Data,
+                            backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                            pointRadius: 6
+                        },
+                        {
+                            label: 'Actual Class 1',
+                            data: class1Data,
+                            backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                            pointRadius: 6
+                        },
+                        {
+                            label: 'Logit Function $P(Y=1|X)$',
+                            data: curveData,
+                            type: 'line',
+                            borderColor: '#007bff',
+                            borderWidth: 3,
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Decision Boundary',
+                            data: boundaryData,
+                            type: 'line',
+                            borderColor: '#e83e8c',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Threshold Level',
+                            data: [{ x: -4, y: threshold }, { x: 4, y: threshold }],
+                            type: 'line',
+                            borderColor: '#007bff',
+                            borderWidth: 1.5,
+                            borderDash: [3, 3],
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: -4,
+                            max: 4,
+                            title: { display: true, text: 'Predictor Variable (X)' }
+                        },
+                        y: {
+                            min: -0.05,
+                            max: 1.05,
+                            title: { display: true, text: 'Probability / Target (Y)' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12 }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Event Listeners
+    [thresholdSlider, slopeSlider, interceptSlider].forEach(slider => {
+        slider.addEventListener('input', updateSimulation);
+    });
+
+    noiseSlider.addEventListener('input', () => {
+        generateData();
+        updateSimulation();
+    });
+
+    regenerateBtn.addEventListener('click', () => {
+        generateData();
+        updateSimulation();
+    });
+
+    // Initial Setup
+    generateData();
+    updateSimulation();
+</script>
+
+</body>
+</html>

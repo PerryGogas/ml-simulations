@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive K-Nearest Neighbors (KNN) Sandbox</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --class-a: #dc2626; /* Red */
+            --class-b: #2563eb; /* Blue */
+            
+            /* Light matching variations for Confusion Matrix cells */
+            --cm-red-correct: #fee2e2;   /* Soft red background for TP (Actual Red / Pred Red) */
+            --cm-red-text: #991b1b;
+            --cm-blue-correct: #dbeafe;  /* Soft blue background for TN (Actual Blue / Pred Blue) */
+            --cm-blue-text: #1e40af;
+            --cm-error: #f1f5f9;         /* Neutral light gray for misclassifications FN/FP */
+            --cm-error-text: #475569;
+            
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1150px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 480px;
+        }
+
+        /* Confusion Matrix Grid layout */
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr 80px;
+            grid-template-rows: 40px 1fr 1fr 60px;
+            gap: 8px;
+            margin: 15px 0;
+            text-align: center;
+            align-items: stretch;
+        }
+
+        .matrix-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .matrix-box {
+            padding: 12px 5px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .box-tp { background-color: var(--cm-red-correct); color: var(--cm-red-text); }
+        .box-tn { background-color: var(--cm-blue-correct); color: var(--cm-blue-text); }
+        .box-fp { background-color: var(--cm-error); color: var(--cm-error-text); }
+        .box-fn { background-color: var(--cm-error); color: var(--cm-error-text); }
+
+        .matrix-count { font-size: 1.5rem; font-weight: 800; }
+        .matrix-pct { font-size: 0.85rem; font-weight: 600; opacity: 0.9; margin-top: 2px; }
+        .matrix-title { font-size: 0.7rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .radio-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #cbd5e1;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        input[type="radio"] { display: none; }
+
+        #classA-label { color: var(--class-a); }
+        #classA-radio:checked + #classA-label { border-color: var(--class-a); background: #fef2f2; }
+        
+        #classB-label { color: var(--class-b); }
+        #classB-radio:checked + #classB-label { border-color: var(--class-b); background: #eff6ff; }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .status-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            border-top: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            justify-content: center;
+            margin-top: 5px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .query-dot { width: 10px; height: 10px; background: #eab308; border-radius: 30%; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>K-Nearest Neighbors (KNN) Playground</h1>
+        <p>Visualize distance metrics, neighborhood voting matrices, and localized decision boundaries live.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="knnCanvas"></canvas>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="color-dot" style="background:var(--class-a)"></span> Class Red</div>
+                <div class="legend-item"><span class="color-dot" style="background:var(--class-b)"></span> Class Blue</div>
+                <div class="legend-item"><span class="query-dot"></span> Query Point (X)</div>
+                <div class="legend-item"><span style="width:15px; height:2px; border-top:2px dashed #94a3b8; display:inline-block; vertical-align:middle;"></span> Distance Radius</div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569;">Confusion Matrix (Leave-One-Out Evaluation)</div>
+            <div class="matrix-container">
+                <div class="matrix-label"></div>
+                <div class="matrix-label" style="color: var(--class-a);">Predicted Red (+)</div>
+                <div class="matrix-label" style="color: var(--class-b);">Predicted Blue (-)</div>
+                <div class="matrix-label" style="color: #475569;">Total</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-a);">Actual Red</div>
+                <div class="matrix-box box-tp" id="m-tp">
+                    <span class="matrix-count" id="count-tp">0</span>
+                    <span class="matrix-pct" id="pct-tp">0.0%</span>
+                    <span class="matrix-title">True Red (TP)</span>
+                </div>
+                <div class="matrix-box box-fn" id="m-fn">
+                    <span class="matrix-count" id="count-fn">0</span>
+                    <span class="matrix-pct" id="pct-fn">0.0%</span>
+                    <span class="matrix-title">False Blue (FN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-pos">0</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-b);">Actual Blue</div>
+                <div class="matrix-box box-fp" id="m-fp">
+                    <span class="matrix-count" id="count-fp">0</span>
+                    <span class="matrix-pct" id="pct-fp">0.0%</span>
+                    <span class="matrix-title">False Red (FP)</span>
+                </div>
+                <div class="matrix-box box-tn" id="m-tn">
+                    <span class="matrix-count" id="count-tn">0</span>
+                    <span class="matrix-pct" id="pct-tn">0.0%</span>
+                    <span class="matrix-title">True Blue (TN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-neg">0</div>
+
+                <div class="matrix-label" style="color: #475569;">Total</div>
+                <div class="matrix-total-cell" id="total-col-pos">0</div>
+                <div class="matrix-total-cell" id="total-col-neg">0</div>
+                <div class="matrix-total-cell" id="total-grand" style="background-color: #cbd5e1; color: #0f172a;">0</div>
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>1. Left-Click Canvas Action</label>
+                <div class="radio-group">
+                    <input type="radio" id="classA-radio" name="modeSelect" value="1" checked>
+                    <label for="classA-radio" id="classA-label" class="radio-label">
+                        <span class="color-dot" style="background:var(--class-a)"></span> + Add Red
+                    </label>
+
+                    <input type="radio" id="classB-radio" name="modeSelect" value="-1">
+                    <label for="classB-radio" id="classB-label" class="radio-label">
+                        <span class="color-dot" style="background:var(--class-b)"></span> + Add Blue
+                    </label>
+                </div>
+                <div class="radio-group">
+                    <input type="radio" id="query-radio" name="modeSelect" value="query">
+                    <label for="query-radio" id="query-label" class="radio-label" style="color:#eab308;">
+                        <span class="query-dot"></span> 🎯 Move Query Point
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="kSlider">2. Number of Neighbors (K)</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>K Neighbors Value</span><span id="kVal" style="color:var(--primary)">3</span></div>
+                    <input type="range" id="kSlider" min="1" max="15" value="3" step="1">
+                </div>
+                <span style="font-size:0.7rem; color:#64748b;">Tip: Use odd numbers for binary classification to avoid tie votes!</span>
+            </div>
+
+            <button id="btnSample" class="btn-secondary">Load Interlocking Sample Data</button>
+            <button id="btnClear" class="btn-danger">Clear Graph Canvas</button>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="status-box" id="hudStatus">
+                <strong>Ensemble Vote Tally Matrix</strong><br>
+                Closest Neighbors found: <span id="hudNeighbors">0</span><br>
+                Vote Breakdowns: <span id="hudVotes" style="font-weight:bold;">N/A</span>
+            </div>
+            
+            <div class="card" style="background:#f8fafc; padding:12px; font-size:0.8rem; box-shadow:none; line-height:1.4;">
+                <strong>🔬 Classroom Demonstration:</strong> Put the app in "Move Query Point" mode. Place it directly inside a dense blue cluster. Now, ramp K up to **15**. Notice how the point can switch to Red if there are more red points globally nearby, showcasing how a large K underfits local structures! The system Confusion Matrix updates automatically based on a global Leave-One-Out validation strategy.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('knnCanvas');
+    const ctx = canvas.getContext('2d');
+    const kSlider = document.getElementById('kSlider');
+    const kVal = document.getElementById('kVal');
+    const btnSample = document.getElementById('btnSample');
+    const btnClear = document.getElementById('btnClear');
+    const hudStatus = document.getElementById('hudStatus');
+    const hudNeighbors = document.getElementById('hudNeighbors');
+    const hudVotes = document.getElementById('hudVotes');
+
+    // Confusion Matrix elements
+    const countTp = document.getElementById('count-tp');
+    const countTn = document.getElementById('count-tn');
+    const countFp = document.getElementById('count-fp');
+    const countFn = document.getElementById('count-fn');
+
+    const pctTp = document.getElementById('pct-tp');
+    const pctTn = document.getElementById('pct-tn');
+    const pctFp = document.getElementById('pct-fp');
+    const pctFn = document.getElementById('pct-fn');
+
+    const totalRowPos = document.getElementById('total-row-pos');
+    const totalRowNeg = document.getElementById('total-row-neg');
+    const totalColPos = document.getElementById('total-col-pos');
+    const totalColNeg = document.getElementById('total-col-neg');
+    const totalGrand = document.getElementById('total-grand');
+
+    let points = [];
+    let queryPoint = { x: 250, y: 250 }; // Center node marker
+    let K = 3;
+
+    const HEX_RED = '#dc2626';
+    const HEX_BLUE = '#2563eb';
+    const HEX_QUERY = '#eab308';
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 480;
+        if(points.length === 0) loadSampleDataset();
+        else evaluateKNN();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Canvas click actions router
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const selectedMode = document.querySelector('input[name="modeSelect"]:checked').value;
+
+        if (selectedMode === "query") {
+            queryPoint.x = x;
+            queryPoint.y = y;
+        } else {
+            let label = parseInt(selectedMode);
+            points.push({ x, y, label });
+        }
+
+        evaluateKNN();
+    });
+
+    // Support dragging functionality for smooth live tracking updates
+    let isDraggingQuery = false;
+    canvas.addEventListener('mousedown', (e) => {
+        const selectedMode = document.querySelector('input[name="modeSelect"]:checked').value;
+        if(selectedMode === "query") {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            let d = Math.sqrt((x - queryPoint.x)**2 + (y - queryPoint.y)**2);
+            if(d < 25) isDraggingQuery = true;
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if(isDraggingQuery) {
+            const rect = canvas.getBoundingClientRect();
+            queryPoint.x = e.clientX - rect.left;
+            queryPoint.y = e.clientY - rect.top;
+            evaluateKNN();
+        }
+    });
+
+    window.addEventListener('mouseup', () => { isDraggingQuery = false; });
+
+    function loadSampleDataset() {
+        points = [];
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Class +1 (Red interlocking moon sweep)
+        for(let i=0; i<15; i++) {
+            let t = i / 14;
+            let cx = w * 0.4 + Math.sin(t * Math.PI) * 120;
+            let cy = h * 0.3 + (t * 200);
+            points.push({ x: cx + (Math.random()-0.5)*30, y: cy + (Math.random()-0.5)*30, label: 1 });
+        }
+
+        // Class -1 (Blue interlocking counter-moon sweep)
+        for(let i=0; i<15; i++) {
+            let t = i / 14;
+            let cx = w * 0.6 - Math.sin(t * Math.PI) * 120;
+            let cy = h * 0.3 + (t * 200);
+            points.push({ x: cx + (Math.random()-0.5)*30, y: cy + (Math.random()-0.5)*30, label: -1 });
+        }
+
+        queryPoint = { x: w * 0.5, y: h * 0.5 };
+        evaluateKNN();
+    }
+
+    // --- CORE K-NEAREST NEIGHBORS CALCULATION PASS ENGINE ---
+    let nearestNeighborsList = [];
+    let boundaryRadius = 0;
+    let queryClassification = 0;
+
+    function evaluateKNN() {
+        if (points.length === 0) {
+            nearestNeighborsList = [];
+            boundaryRadius = 0;
+            updateConfusionMatrix(0, 0, 0, 0);
+            render();
+            return;
+        }
+
+        // 1. Calculate Euclidean Distances to all database points for the active query point
+        points.forEach(p => {
+            p.distance = Math.sqrt((p.x - queryPoint.x)**2 + (p.y - queryPoint.y)**2);
+        });
+
+        // Sort points by distance ascendingly
+        points.sort((a, b) => a.distance - b.distance);
+
+        // Extract the top K components slice
+        let clampedK = Math.min(K, points.length);
+        nearestNeighborsList = points.slice(0, clampedK);
+
+        // Calculate boundary enclosing perimeter diameter radius length
+        if (nearestNeighborsList.length > 0) {
+            boundaryRadius = nearestNeighborsList[nearestNeighborsList.length - 1].distance;
+        } else {
+            boundaryRadius = 0;
+        }
+
+        // Compute consensus majority votes tally for query point
+        let redVotes = nearestNeighborsList.filter(n => n.label === 1).length;
+        let blueVotes = nearestNeighborsList.filter(n => n.label === -1).length;
+
+        if (redVotes > blueVotes) {
+            queryClassification = 1;
+        } else if (blueVotes > redVotes) {
+            queryClassification = -1;
+        } else {
+            queryClassification = 0; // TIE VOTE SCENARIO
+        }
+
+        // Update Text HUD metrics indicators
+        hudNeighbors.innerText = clampedK;
+        if(clampedK === 0) {
+            hudVotes.innerText = "N/A";
+            hudStatus.style.borderColor = "#cbd5e1";
+        } else {
+            let textClass = queryClassification === 1 ? "Red Class" : queryClassification === -1 ? "Blue Class" : "Tie Broken Randomly";
+            hudVotes.innerHTML = `<span style="color:${HEX_RED}">${redVotes} Red</span> vs <span style="color:${HEX_BLUE}">${blueVotes} Blue</span><br>Outcome Prediction: <span style="color:${queryClassification === 1 ? HEX_RED : queryClassification === -1 ? HEX_BLUE : '#475569'}">${textClass}</span>`;
+            hudStatus.style.borderColor = queryClassification === 1 ? HEX_RED : queryClassification === -1 ? HEX_BLUE : '#eab308';
+        }
+
+        // 2. Perform global Leave-One-Out (LOO) Validation to build the complete Confusion Matrix
+        computeGlobalConfusionMatrix();
+
+        render();
+    }
+
+    function computeGlobalConfusionMatrix() {
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+
+        if (points.length < 2) {
+            updateConfusionMatrix(0, 0, 0, 0);
+            return;
+        }
+
+        // Evaluate each point by excluding it from the comparison database set
+        for (let i = 0; i < points.length; i++) {
+            let targetPoint = points[i];
+            let listDistances = [];
+
+            for (let j = 0; j < points.length; j++) {
+                if (i === j) continue; // Exclude itself
+                let neighborCandidate = points[j];
+                let dist = Math.sqrt((targetPoint.x - neighborCandidate.x)**2 + (targetPoint.y - neighborCandidate.y)**2);
+                listDistances.push({ distance: dist, label: neighborCandidate.label });
+            }
+
+            // Sort relative distances ascendingly
+            listDistances.sort((a, b) => a.distance - b.distance);
+            let activeK = Math.min(K, listDistances.length);
+            let sliceK = listDistances.slice(0, activeK);
+
+            let rVotes = sliceK.filter(n => n.label === 1).length;
+            let bVotes = sliceK.filter(n => n.label === -1).length;
+            let predLabel = rVotes >= bVotes ? 1 : -1;
+
+            if (targetPoint.label === 1 && predLabel === 1) tp++;
+            else if (targetPoint.label === -1 && predLabel === -1) tn++;
+            else if (targetPoint.label === -1 && predLabel === 1) fp++;
+            else if (targetPoint.label === 1 && predLabel === -1) fn++;
+        }
+
+        updateConfusionMatrix(tp, tn, fp, fn);
+    }
+
+    function updateConfusionMatrix(tp, tn, fp, fn) {
+        countTp.innerText = tp;
+        countTn.innerText = tn;
+        countFp.innerText = fp;
+        countFn.innerText = fn;
+
+        let rowPosTotal = tp + fn;
+        let rowNegTotal = fp + tn;
+        let colPosTotal = tp + fp;
+        let colNegTotal = fn + tn;
+        let grandTotal = tp + tn + fp + fn;
+
+        totalRowPos.innerText = rowPosTotal;
+        totalRowNeg.innerText = rowNegTotal;
+        totalColPos.innerText = colPosTotal;
+        totalColNeg.innerText = colNegTotal;
+        totalGrand.innerText = grandTotal;
+
+        let tpPct = rowPosTotal > 0 ? (tp / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fnPct = rowPosTotal > 0 ? (fn / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fpPct = rowNegTotal > 0 ? (fp / rowNegTotal * 100).toFixed(1) : '0.0';
+        let tnPct = rowNegTotal > 0 ? (tn / rowNegTotal * 100).toFixed(1) : '0.0';
+
+        pctTp.innerText = `${tpPct}%`;
+        pctFn.innerText = `${fnPct}%`;
+        pctFp.innerText = `${fpPct}%`;
+        pctTn.innerText = `${tnPct}%`;
+    }
+
+    // --- GRAPHICAL CANVAS RENDER MODULE ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Grid lines backdrop mesh
+        ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
+        for (let i = 40; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+        for (let i = 40; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+        // Draw Dynamic Distance Radius Bubble vector overlay hull
+        if (points.length > 0 && boundaryRadius > 0) {
+            ctx.beginPath();
+            ctx.arc(queryPoint.x, queryPoint.y, boundaryRadius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.05)'; // transparent background tracking fill
+            ctx.fill();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]); // dashed look
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Draw connection tracking lines connecting query point to its K closest neighbors
+        if (nearestNeighborsList.length > 0) {
+            ctx.strokeStyle = 'rgba(234, 179, 8, 0.35)'; ctx.lineWidth = 1.5;
+            nearestNeighborsList.forEach(n => {
+                ctx.beginPath();
+                ctx.moveTo(queryPoint.x, queryPoint.y);
+                ctx.lineTo(n.x, n.y);
+                ctx.stroke();
+            });
+        }
+
+        // Draw historical class instances data coordinates
+        points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = p.label === 1 ? HEX_RED : HEX_BLUE;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // Highlight the selected neighbors with a thick outer outline ring
+            if (nearestNeighborsList.includes(p)) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        });
+
+        // Draw the query target node on top layer
+        ctx.beginPath();
+        ctx.arc(queryPoint.x, queryPoint.y, 10, 0, Math.PI * 2);
+        // Fill dynamically based on ongoing classification outcome predictions
+        ctx.fillStyle = queryClassification === 1 ? HEX_RED : queryClassification === -1 ? HEX_BLUE : HEX_QUERY;
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5; ctx.stroke();
+        
+        // Target crosshair vector point center indicator dot
+        ctx.beginPath(); ctx.arc(queryPoint.x, queryPoint.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+    }
+
+    // Controls listeners modifications
+    kSlider.addEventListener('input', (e) => {
+        K = parseInt(e.target.value);
+        kVal.innerText = K;
+        evaluateKNN();
+    });
+
+    btnSample.addEventListener('click', loadSampleDataset);
+    btnClear.addEventListener('click', () => { points = []; nearestNeighborsList = []; boundaryRadius = 0; queryClassification = 0; evaluateKNN(); });
+
+    // Initial Startup Configuration Setup
+    setTimeout(() => { resizeCanvas(); }, 100);
+</script>
+</body>
+</html>

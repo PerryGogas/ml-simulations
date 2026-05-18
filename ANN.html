@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive ANN Architecture Sandbox</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1050px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 500px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        select {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .math-box {
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            border-left: 4px solid var(--primary);
+        }
+
+        .hint-box {
+            font-size: 0.85rem;
+            color: #475569;
+            background: #eff6ff;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>ANN Forward Propagation Sandbox</h1>
+        <p>Trace the step-by-step linear combinations and non-linear activation mechanics inside a neural network.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="canvas-container">
+                <canvas id="networkCanvas"></canvas>
+            </div>
+            <div class="hint-box">
+                <strong>🧠 Classroom Interaction:</strong> Hover your mouse cursor over any node or connecting synapse weight line to view its raw value and watch the computation trace illuminate live!
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label for="activationSelect">Activation Function (f(z))</label>
+                <select id="activationSelect">
+                    <option value="sigmoid">Sigmoid (0 to 1)</option>
+                    <option value="relu">ReLU (Max(0, z))</option>
+                    <option value="linear">Linear (No change)</option>
+                </select>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>Network Inputs</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Input X<sub>1</sub></span><span id="x1Val" style="color:var(--primary)">0.50</span></div>
+                    <input type="range" id="inputX1" min="-2" max="2" value="0.5" step="0.1">
+                </div>
+                <div class="slider-wrap" style="margin-top:5px;">
+                    <div class="slider-header"><span>Input X<sub>2</sub></span><span id="x2Val" style="color:var(--primary)">-0.80</span></div>
+                    <input type="range" id="inputX2" min="-2" max="2" value="-0.8" step="0.1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Weight Scaling Bias Offset</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Hidden Layer Biases (b<sub>h</sub>)</span><span id="biasHVal" style="color:var(--success)">0.10</span></div>
+                    <input type="range" id="biasH" min="-2" max="2" value="0.1" step="0.1">
+                </div>
+                <div class="slider-wrap" style="margin-top:5px;">
+                    <div class="slider-header"><span>Output Neuron Bias (b<sub>o</sub>)</span><span id="biasOVal" style="color:var(--success)">-0.30</span></div>
+                    <input type="range" id="biasO" min="-2" max="2" value="-0.3" step="0.1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label style="font-size:0.8rem; text-transform:uppercase; color:#64748b;">Live Node Equation Trace</label>
+                <div class="math-box" id="mathOutput">
+                    Hover over a node to reveal real-time linear combination calculations.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('networkCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Control Elements References
+    const activationSelect = document.getElementById('activationSelect');
+    const inputX1 = document.getElementById('inputX1');
+    const inputX2 = document.getElementById('inputX2');
+    const biasH = document.getElementById('biasH');
+    const biasO = document.getElementById('biasO');
+
+    const x1Val = document.getElementById('x1Val');
+    const x2Val = document.getElementById('x2Val');
+    const biasHVal = document.getElementById('biasHVal');
+    const biasOVal = document.getElementById('biasOVal');
+    const mathOutput = document.getElementById('mathOutput');
+
+    // Define Network Layer Node Matrix Arrays Coordinates
+    let nodes = [];
+    let weights = {};
+    let mousePos = { x: -1, y: -1 };
+    let hoveredElement = null;
+
+    // Define fixed neural weights to prevent chaotic layout adjustments
+    const fixedWeights = {
+        // Input to Hidden Layer Connections Weights Matrix
+        'w_x1_h1': 0.8,  'w_x1_h2': -0.5, 'w_x1_h3': 0.4,
+        'w_x2_h1': -0.3, 'w_x2_h2': 0.9,  'w_x2_h3': -0.2,
+        // Hidden to Output Layer Connections Weights Matrix
+        'w_h1_o1': 0.7,  'w_h2_o1': -0.6, 'w_h3_o1': 0.5
+    };
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 500;
+        buildNetworkArchitecture();
+        updateEngine();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Activations Math Library Subroutines
+    function evaluateActivation(z, type) {
+        if(type === 'sigmoid') return 1 / (1 + Math.exp(-z));
+        if(type === 'relu') return Math.max(0, z);
+        return z; // Linear identity fallback execution
+    }
+
+    function buildNetworkArchitecture() {
+        nodes = [];
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Layer 1: Input layer Positions (2 nodes)
+        nodes.push({ id: 'x1', type: 'input', x: w * 0.15, y: h * 0.33, val: 0 });
+        nodes.push({ id: 'x2', type: 'input', x: w * 0.15, y: h * 0.66, val: 0 });
+
+        // Layer 2: Hidden layer Positions (3 nodes)
+        nodes.push({ id: 'h1', type: 'hidden', x: w * 0.5, y: h * 0.2, z: 0, val: 0 });
+        nodes.push({ id: 'h2', type: 'hidden', x: w * 0.5, y: h * 0.5, z: 0, val: 0 });
+        nodes.push({ id: 'h3', type: 'hidden', x: w * 0.5, y: h * 0.8, z: 0, val: 0 });
+
+        // Layer 3: Output layer Position (1 node)
+        nodes.push({ id: 'o1', type: 'output', x: w * 0.85, y: h * 0.5, z: 0, val: 0 });
+    }
+
+    // Core Forward Propagation Calculation Pass Engine
+    function forwardPropagate() {
+        const actType = activationSelect.value;
+        const bH = parseFloat(biasH.value);
+        const bO = parseFloat(biasO.value);
+
+        // Set explicit Input layer assignments
+        nodes.find(n => n.id === 'x1').val = parseFloat(inputX1.value);
+        nodes.find(n => n.id === 'x2').val = parseFloat(inputX2.value);
+
+        const x1 = nodes.find(n => n.id === 'x1').val;
+        const x2 = nodes.find(n => n.id === 'x2').val;
+
+        // Propagate into Hidden Layer Nodes
+        ['h1', 'h2', 'h3'].forEach(hId => {
+            let hNode = nodes.find(n => n.id === hId);
+            // Linear Combination Matrix Equation: z = w1*x1 + w2*x2 + bias
+            hNode.z = (x1 * fixedWeights[`w_x1_${hId}`]) + (x2 * fixedWeights[`w_x2_${hId}`]) + bH;
+            hNode.val = evaluateActivation(hNode.z, actType);
+        });
+
+        // Propagate into Output Layer Node
+        let oNode = nodes.find(n => n.id === 'o1');
+        let h1Val = nodes.find(n => n.id === 'h1').val;
+        let h2Val = nodes.find(n => n.id === 'h2').val;
+        let h3Val = nodes.find(n => n.id === 'h3').val;
+
+        oNode.z = (h1Val * fixedWeights['w_h1_o1']) + (h2Val * fixedWeights['w_h2_o1']) + (h3Val * fixedWeights['w_h3_o1']) + bO;
+        oNode.val = evaluateActivation(oNode.z, actType);
+    }
+
+    // Interactive Tracing HUD Engine Output Logic
+    function handleInteractivityLog() {
+        if (!hoveredElement) {
+            mathOutput.innerHTML = `// SYSTEM HUD STATUS<br>Hover over any node network component matrix to extract mathematics trace data.`;
+            return;
+        }
+
+        const actType = activationSelect.value.toUpperCase();
+        const bH = parseFloat(biasH.value).toFixed(2);
+        const bO = parseFloat(biasO.value).toFixed(2);
+
+        if (hoveredElement.type === 'node') {
+            const n = hoveredElement.target;
+            if (n.type === 'input') {
+                mathOutput.innerHTML = `// Input Node Vector:<br>${n.id.toUpperCase()} value = ${n.val.toFixed(3)}`;
+            } else if (n.type === 'hidden') {
+                const x1 = nodes.find(i => i.id === 'x1').val.toFixed(2);
+                const x2 = nodes.find(i => i.id === 'x2').val.toFixed(2);
+                const w1 = fixedWeights[`w_x1_${n.id}`].toFixed(2);
+                const w2 = fixedWeights[`w_x2_${n.id}`].toFixed(2);
+
+                mathOutput.innerHTML = `// Hidden Unit ${n.id.toUpperCase()}:<br>` +
+                    `Linear Combination (z):<br>` +
+                    `z = (${w1} * ${x1}) + (${w2} * ${x2}) + Bias(${bH})<br>` +
+                    `z = ${n.z.toFixed(3)}<br><br>` +
+                    `Activation Output (a):<br>` +
+                    `a = ${actType}(z) = <b>${n.val.toFixed(4)}</b>`;
+            } else if (n.type === 'output') {
+                const h1 = nodes.find(i => i.id === 'h1').val.toFixed(2);
+                const h2 = nodes.find(i => i.id === 'h2').val.toFixed(2);
+                const h3 = nodes.find(i => i.id === 'h3').val.toFixed(2);
+                const w1 = fixedWeights['w_h1_o1'].toFixed(2);
+                const w2 = fixedWeights['w_h2_o1'].toFixed(2);
+                const w3 = fixedWeights['w_h3_o1'].toFixed(2);
+
+                mathOutput.innerHTML = `// Final Output Unit O1:<br>` +
+                    `Linear Combination (z):<br>` +
+                    `z = (${w1}*${h1}) + (${w2}*${h2}) + (${w3}*${h3}) + Bias(${bO})<br>` +
+                    `z = ${n.z.toFixed(3)}<br><br>` +
+                    `Network Final Output (y_hat):<br>` +
+                    `y_hat = ${actType}(z) = <b style='color:#22c55e'>${n.val.toFixed(4)}</b>`;
+            }
+        } else if (hoveredElement.type === 'synapse') {
+            const s = hoveredElement.target;
+            mathOutput.innerHTML = `// Synaptic Weight Connection:<br>` +
+                `Source Node: ${s.from.toUpperCase()}<br>` +
+                `Target Node: ${s.to.toUpperCase()}<br>` +
+                `Connection Weight (w) = <b>${s.weight.toFixed(2)}</b>`;
+        }
+    }
+
+    // Graphical Render Loop Framework
+    function drawNetworkGraph() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Synapses (Connection lines) first so they sit below nodes safely
+        nodes.forEach(fromNode => {
+            nodes.forEach(toNode => {
+                const weightKey = `w_${fromNode.id}_${toNode.id}`;
+                if (fixedWeights[weightKey] !== undefined) {
+                    const weight = fixedWeights[weightKey];
+                    ctx.beginPath();
+                    ctx.moveTo(fromNode.x, fromNode.y);
+                    ctx.lineTo(toNode.x, toNode.y);
+
+                    // Check if current synapse path line is hovered
+                    let isHovered = false;
+                    if (hoveredElement && hoveredElement.type === 'synapse' && 
+                        hoveredElement.target.from === fromNode.id && hoveredElement.target.to === toNode.id) {
+                        isHovered = true;
+                    }
+
+                    // Render weights styling mappings: Blue for positive, Red for negative connections
+                    ctx.strokeStyle = weight > 0 ? `rgba(37, 99, 235, ${isHovered ? 1.0 : 0.4})` : `rgba(239, 68, 68, ${isHovered ? 1.0 : 0.4})`;
+                    ctx.lineWidth = isHovered ? 5 : Math.abs(weight) * 4;
+                    ctx.stroke();
+
+                    // Draw subtle weight labels inline mid-way along paths
+                    const midX = (fromNode.x + toNode.x) / 2;
+                    const midY = (fromNode.y + toNode.y) / 2 - 5;
+                    ctx.fillStyle = '#475569';
+                    ctx.font = 'bold 12px monospace';
+                    ctx.fillText(`w=${weight.toFixed(1)}`, midX, midY);
+                }
+            });
+        });
+
+        // 2. Draw Nodes
+        nodes.forEach(n => {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, 24, 0, Math.PI * 2);
+
+            let isHovered = hoveredElement && hoveredElement.type === 'node' && hoveredElement.target.id === n.id;
+            
+            // Background fill types mapping layers
+            if(n.type === 'input') ctx.fillStyle = '#eff6ff';
+            else if(n.type === 'hidden') ctx.fillStyle = '#f0fdf4';
+            else ctx.fillStyle = '#fdf2f8';
+
+            ctx.fill();
+            
+            ctx.strokeStyle = isHovered ? '#0f172a' : (n.type === 'input' ? '#2563eb' : n.type === 'hidden' ? '#16a34a' : '#db2777');
+            ctx.lineWidth = isHovered ? 3.5 : 2;
+            ctx.stroke();
+
+            // Label text tracking value outcomes inside nodes
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(n.id.toUpperCase(), n.x, n.y - 3);
+            
+            ctx.font = 'bold 12px monospace';
+            ctx.fillStyle = '#0f172a';
+            ctx.fillText(n.val.toFixed(2), n.x, n.y + 11);
+        });
+
+        // Render Layer structural group footer labels
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('INPUT LAYER', canvas.width * 0.15, canvas.height - 15);
+        ctx.fillText('HIDDEN LAYER', canvas.width * 0.5, canvas.height - 15);
+        ctx.fillText('OUTPUT LAYER', canvas.width * 0.85, canvas.height - 15);
+    }
+
+    // Collision Detection Matrix calculations supporting tracking hovering loops
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mousePos.x = e.clientX - rect.left;
+        mousePos.y = e.clientY - rect.top;
+
+        let found = null;
+
+        // Check node boundaries collisions first
+        for (let n of nodes) {
+            let dist = Math.sqrt((mousePos.x - n.x)**2 + (mousePos.y - n.y)**2);
+            if (dist <= 24) {
+                found = { type: 'node', target: n };
+                break;
+            }
+        }
+
+        // If no node collision, check proximity line distances for connections synapses
+        if (!found) {
+            for (let fromNode of nodes) {
+                for (let toNode of nodes) {
+                    const weightKey = `w_${fromNode.id}_${toNode.id}`;
+                    if (fixedWeights[weightKey] !== undefined) {
+                        // Math check formula: distance from point to line segment
+                        let d = distToSegment(mousePos, fromNode, toNode);
+                        if (d < 8) {
+                            found = { 
+                                type: 'synapse', 
+                                target: { from: fromNode.id, to: toNode.id, weight: fixedWeights[weightKey] } 
+                            };
+                            break;
+                        }
+                    }
+                }
+                if (found) break;
+            }
+        }
+
+        hoveredElement = found;
+        handleInteractivityLog();
+        drawNetworkGraph();
+    });
+
+    // Distance vector calculation geometry helpers
+    function distToSegment(p, v, w) {
+        let l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+        if (l2 == 0) return Math.sqrt((p.x - v.x)**2 + (p.y - v.y)**2);
+        let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return Math.sqrt((p.x - (v.x + t * (w.x - v.x)))**2 + (p.y - (v.y + t * (w.y - v.y)))**2);
+    }
+
+    function updateEngine() {
+        // Update display text sliders values
+        x1Val.innerText = parseFloat(inputX1.value).toFixed(2);
+        x2Val.innerText = parseFloat(inputX2.value).toFixed(2);
+        biasHVal.innerText = parseFloat(biasH.value).toFixed(2);
+        biasOVal.innerText = parseFloat(biasO.value).toFixed(2);
+
+        forwardPropagate();
+        handleInteractivityLog();
+        drawNetworkGraph();
+    }
+
+    // Add event bindings hooks across parameter inputs
+    [inputX1, inputX2, biasH, biasO, activationSelect].forEach(element => {
+        element.addEventListener('input', updateEngine);
+    });
+
+    // Initial Bootstrap run sequencing initialization
+    setTimeout(() => {
+        resizeCanvas();
+    }, 100);
+</script>
+</body>
+</html>

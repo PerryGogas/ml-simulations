@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive XGBoost Step-by-Step Simulator</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --residual-color: #dc2626;
+            --prediction-color: #16a34a;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+            
+            /* Soft matching variations for Confusion Matrix cells */
+            --cm-red-correct: #fee2e2;   /* Soft background for High Class (Actual High / Pred High) */
+            --cm-red-text: #991b1b;
+            --cm-blue-correct: #dbeafe;  /* Soft background for Low Class (Actual Low / Pred Low) */
+            --cm-blue-text: #1e40af;
+            --cm-error: #f1f5f9;         /* Neutral light gray for misclassifications */
+            --cm-error-text: #475569;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1150px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 420px;
+        }
+
+        /* Confusion Matrix Grid layout */
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 110px 1fr 1fr 80px;
+            grid-template-rows: 40px 1fr 1fr 60px;
+            gap: 8px;
+            margin: 15px 0;
+            text-align: center;
+            align-items: stretch;
+        }
+
+        .matrix-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .matrix-box {
+            padding: 12px 5px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .box-tp { background-color: var(--cm-red-correct); color: var(--cm-red-text); }
+        .box-tn { background-color: var(--cm-blue-correct); color: var(--cm-blue-text); }
+        .box-fp { background-color: var(--cm-error); color: var(--cm-error-text); }
+        .box-fn { background-color: var(--cm-error); color: var(--cm-error-text); }
+
+        .matrix-count { font-size: 1.5rem; font-weight: 800; }
+        .matrix-pct { font-size: 0.85rem; font-weight: 600; opacity: 0.9; margin-top: 2px; }
+        .matrix-title { font-size: 0.7rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .toggle-group-wrap {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+
+        .toggle-label {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #475569;
+        }
+
+        input[type="radio"] { display: none; }
+
+        #metricTargetA:checked ~ .metric-toggle-group label[for="metricTargetA"],
+        #metricTargetB:checked ~ .metric-toggle-group label[for="metricTargetB"] {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .status-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            border-top: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tree-log {
+            font-family: monospace;
+            font-size: 0.75rem;
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 12px;
+            border-radius: 6px;
+            max-height: 140px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            justify-content: center;
+            margin-top: 5px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>XGBoost (Gradient Boosting) Visualizer</h1>
+        <p>Demystify sequential ensemble learning by watching weak decision trees fit to residuals step-by-step.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="canvas-container">
+                <canvas id="boostCanvas"></canvas>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="color-dot" style="background:#0f172a"></span> True Target (y)</div>
+                <div class="legend-item"><span class="color-dot" style="background:var(--prediction-color)"></span> Global Ensemble Prediction (y_hat)</div>
+                <div class="legend-item"><span class="color-dot" style="background:var(--residual-color)"></span> Current Residuals (y - y_hat)</div>
+            </div>
+            <div class="status-box" style="margin-top:5px; font-size:0.8rem;">
+                <strong>💡 Quick Classroom Guide:</strong> Watch how the red residual dots flatten out toward zero as you add more trees. That represents the ensemble slowly master-fitting the target curve!
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569;">Confusion Matrix (Discrete Threshold Partition Mapping)</div>
+            <div class="matrix-container">
+                <div class="matrix-label"></div>
+                <div class="matrix-label" style="color: var(--prediction-color);">Predicted High (+)</div>
+                <div class="matrix-label" style="color: #64748b;">Predicted Low (-)</div>
+                <div class="matrix-label" style="color: #475569;">Total</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: #0f172a;">Actual High</div>
+                <div class="matrix-box box-tp" id="m-tp">
+                    <span class="matrix-count" id="count-tp">0</span>
+                    <span class="matrix-pct" id="pct-tp">0.0%</span>
+                    <span class="matrix-title">True High (TP)</span>
+                </div>
+                <div class="matrix-box box-fn" id="m-fn">
+                    <span class="matrix-count" id="count-fn">0</span>
+                    <span class="matrix-pct" id="pct-fn">0.0%</span>
+                    <span class="matrix-title">False Low (FN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-pos">0</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: #64748b;">Actual Low</div>
+                <div class="matrix-box box-fp" id="m-fp">
+                    <span class="matrix-count" id="count-fp">0</span>
+                    <span class="matrix-pct" id="pct-fp">0.0%</span>
+                    <span class="matrix-title">False High (FP)</span>
+                </div>
+                <div class="matrix-box box-tn" id="m-tn">
+                    <span class="matrix-count" id="count-tn">0</span>
+                    <span class="matrix-pct" id="pct-tn">0.0%</span>
+                    <span class="matrix-title">True Low (TN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-neg">0</div>
+
+                <div class="matrix-label" style="color: #475569;">Total</div>
+                <div class="matrix-total-cell" id="total-col-pos">0</div>
+                <div class="matrix-total-cell" id="total-col-neg">0</div>
+                <div class="matrix-total-cell" id="total-grand" style="background-color: #cbd5e1; color: #0f172a;">0</div>
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>Hyperparameters</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Learning Rate (η)</span><span id="lrVal" style="color:var(--primary)">0.30</span></div>
+                    <input type="range" id="learningRate" min="0.05" max="1" value="0.3" step="0.05">
+                </div>
+                <div class="slider-wrap" style="margin-top: 5px;">
+                    <div class="slider-header"><span>Tree Splits (Max Depth)</span><span style="color:var(--primary)">Stumps (1 Split)</span></div>
+                    <input type="range" id="maxDepth" min="1" max="1" value="1" disabled>
+                    <span style="font-size:0.7rem; color:#64748b;">(Simplified to stumps to clearly visualize thresholds)</span>
+                </div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>Sequential Optimization Engine</label>
+                <div class="btn-grid">
+                    <button id="btnStepTree" class="btn-primary">Add 1 Boosted Tree</button>
+                    <button id="btnRunAll" class="btn-secondary">Train 20 Trees</button>
+                </div>
+                <button id="btnReset" class="btn-danger" style="margin-top:5px;">Reset Model & Data</button>
+            </div>
+
+            <div class="status-box" id="hudPanel">
+                <strong>Model Initialization State</strong><br>
+                Trees Trained: <b id="hudTreeCount">0</b><br>
+                Current Ensemble Mean Squared Error: <b id="hudMse">0.00</b>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>3. Select Target Focus Class for Metrics Calculations</label>
+                <input type="radio" id="metricTargetA" name="metricClassTarget" value="1" checked>
+                <input type="radio" id="metricTargetB" name="metricClassTarget" value="0">
+                <div class="metric-toggle-group toggle-group-wrap">
+                    <label for="metricTargetA" class="toggle-label">High Class (+)</label>
+                    <label for="metricTargetB" class="toggle-label">Low Class (-)</label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Derived Classification Performance Rates</label>
+                <div class="metrics-grid">
+                    <div class="metric-card" title="Accuracy = (TP + TN) / Total">
+                        <div class="metric-name">Accuracy</div>
+                        <div class="metric-value" id="mVal-accuracy">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="precision-card-desc" title="Precision = TP / (TP + FP)">
+                        <div class="metric-name" id="precision-label-text">Precision</div>
+                        <div class="metric-value" id="mVal-precision">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="recall-card-desc" title="Recall (Sensitivity) = TP / (TP + FN)">
+                        <div class="metric-name" id="recall-label-text">Sensitivity (Recall)</div>
+                        <div class="metric-value" id="mVal-recall">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="specificity-card-desc" title="Specificity = TN / (TN + FP)">
+                        <div class="metric-name" id="specificity-label-text">Specificity</div>
+                        <div class="metric-value" id="mVal-specificity">0.0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label style="font-size:0.8rem; color:#64748b; text-transform:uppercase;">Ensemble Step Log</label>
+                <div class="tree-log" id="treeLog">Model initialized with base constant prediction (mean value of y).</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('boostCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Controls Interface References
+    const lrSlider = document.getElementById('learningRate');
+    const lrVal = document.getElementById('lrVal');
+    const btnStepTree = document.getElementById('btnStepTree');
+    const btnRunAll = document.getElementById('btnRunAll');
+    const btnReset = document.getElementById('btnReset');
+    const hudTreeCount = document.getElementById('hudTreeCount');
+    const hudMse = document.getElementById('hudMse');
+    const treeLog = document.getElementById('treeLog');
+    const metricTargetA = document.getElementById('metricTargetA');
+    const metricTargetB = document.getElementById('metricTargetB');
+
+    // Confusion Matrix elements
+    const countTp = document.getElementById('count-tp');
+    const countTn = document.getElementById('count-tn');
+    const countFp = document.getElementById('count-fp');
+    const countFn = document.getElementById('count-fn');
+
+    const pctTp = document.getElementById('pct-tp');
+    const pctTn = document.getElementById('pct-tn');
+    const pctFp = document.getElementById('pct-fp');
+    const pctFn = document.getElementById('pct-fn');
+
+    const totalRowPos = document.getElementById('total-row-pos');
+    const totalRowNeg = document.getElementById('total-row-neg');
+    const totalColPos = document.getElementById('total-col-pos');
+    const totalColNeg = document.getElementById('total-col-neg');
+    const totalGrand = document.getElementById('total-grand');
+
+    // Derived Summary Metrics elements
+    const mValAccuracy = document.getElementById('mVal-accuracy');
+    const mValPrecision = document.getElementById('mVal-precision');
+    const mValRecall = document.getElementById('mVal-recall');
+    const mValSpecificity = document.getElementById('mVal-specificity');
+
+    const precisionLabelText = document.getElementById('precision-label-text');
+    const recallLabelText = document.getElementById('recall-label-text');
+    const specificityLabelText = document.getElementById('specificity-label-text');
+    
+    const precisionCardDesc = document.getElementById('precision-card-desc');
+    const recallCardDesc = document.getElementById('recall-card-desc');
+    const specificityCardDesc = document.getElementById('specificity-card-desc');
+
+    // Global App Mathematical States Cache
+    let dataPoints = [];
+    let treesPool = []; // Stores individual split nodes parameters
+    let basePred = 0;   // F(0) initial mean value baseline prediction
+    const totalPoints = 30;
+
+    // Classification threshold setup for continuous to discrete conversion
+    let binaryCutoffY = 0;
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 420;
+        if(dataPoints.length === 0) generateData();
+        render();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Generate a clean step-like nonlinear function curve to optimize
+    function generateData() {
+        dataPoints = [];
+        treesPool = [];
+        
+        for (let i = 0; i < totalPoints; i++) {
+            let x = 40 + ((canvas.width - 80) * (i / (totalPoints - 1)));
+            let normX = i / totalPoints;
+            
+            let y = canvas.height * 0.5;
+            if (normX > 0.25) y -= 100;
+            if (normX > 0.6) y += 160;
+            if (normX > 0.85) y -= 90;
+            y += (Math.random() - 0.5) * 20; // minimal noise
+
+            dataPoints.push({ x: x, y: y, currentPrediction: 0, residual: 0, discreteLabel: 0 });
+        }
+
+        // Establish binary cutoff around mid-point configuration of ground truth elements
+        let sortedY = dataPoints.map(p => p.y).sort((a, b) => a - b);
+        binaryCutoffY = sortedY[Math.floor(totalPoints / 2)];
+
+        // Assign static ground truth binary labels (In canvas coords, lower Y is higher position value)
+        dataPoints.forEach(p => {
+            p.discreteLabel = p.y <= binaryCutoffY ? 1 : 0;
+        });
+
+        // XGBoost Initialization Stage: Compute Initial Global Base Prediction F_0(x)
+        let sumY = dataPoints.reduce((sum, p) => sum + p.y, 0);
+        basePred = sumY / totalPoints;
+
+        dataPoints.forEach(p => {
+            p.currentPrediction = basePred;
+            p.residual = p.y - p.currentPrediction;
+        });
+
+        treeLog.innerText = `[Tree 00] Base Model Initialized.\nConstant prediction fixed at mean y = ${basePred.toFixed(1)}`;
+        evaluateMatrixAndMetrics();
+    }
+
+    // Mathematical Solver: Find the Optimal Split Point (Stump) to minimize residual variance
+    function fitResidualDecisionStump() {
+        let bestSplitX = 0;
+        let bestGain = -Infinity;
+        let finalLeftOutput = 0;
+        let finalRightOutput = 0;
+
+        for (let i = 1; i < dataPoints.length - 1; i++) {
+            let splitThresholdX = (dataPoints[i].x + dataPoints[i+1].x) / 2;
+
+            let leftNodes = dataPoints.filter(p => p.x <= splitThresholdX);
+            let rightNodes = dataPoints.filter(p => p.x > splitThresholdX);
+
+            if (leftNodes.length === 0 || rightNodes.length === 0) continue;
+
+            const lambda = 1.0;
+
+            let sumGradLeft = leftNodes.reduce((s, p) => s + p.residual, 0);
+            let sumGradRight = rightNodes.reduce((s, p) => s + p.residual, 0);
+            let sumGradTotal = dataPoints.reduce((s, p) => s + p.residual, 0);
+
+            let gain = 0.5 * (
+                (sumGradLeft ** 2) / (leftNodes.length + lambda) +
+                (sumGradRight ** 2) / (rightNodes.length + lambda) -
+                (sumGradTotal ** 2) / (dataPoints.length + lambda)
+            );
+
+            if (gain > bestGain) {
+                bestGain = gain;
+                bestSplitX = splitThresholdX;
+                finalLeftOutput = sumGradLeft / (leftNodes.length + lambda);
+                finalRightOutput = sumGradRight / (rightNodes.length + lambda);
+            }
+        }
+
+        return { splitX: bestSplitX, leftVal: finalLeftOutput, rightVal: finalRightOutput, gain: bestGain };
+    }
+
+    // Core Ensembling Mechanism Step Loop
+    function stepEnsembleBoosting() {
+        if (treesPool.length >= 40) return; 
+
+        const lr = parseFloat(lrSlider.value);
+        let stump = fitResidualDecisionStump();
+
+        treesPool.push(stump);
+
+        dataPoints.forEach(p => {
+            let increment = (p.x <= stump.splitX) ? stump.leftVal : stump.rightVal;
+            p.currentPrediction += lr * increment;
+            p.residual = p.y - p.currentPrediction; 
+        });
+
+        treeLog.innerText += `\n[Tree ${String(treesPool.length).padStart(2, '0')}] Split X Threshold: ${stump.splitX.toFixed(0)} | Left Leaf: ${stump.leftVal.toFixed(1)} | Right Leaf: ${stump.rightVal.toFixed(1)}`;
+        treeLog.scrollTop = treeLog.scrollHeight;
+
+        evaluateMatrixAndMetrics();
+        render();
+    }
+
+    function runBatchTraining() {
+        for(let i=0; i<20; i++) {
+            stepEnsembleBoosting();
+        }
+    }
+
+    // --- MAIN ENGINE CONFUSION MATRIX & EVALUATION HUD RATES MODULE ---
+    function evaluateMatrixAndMetrics() {
+        hudTreeCount.innerText = treesPool.length;
+        
+        let sumSquaredError = dataPoints.reduce((sum, p) => sum + Math.pow(p.y - p.currentPrediction, 2), 0);
+        let mse = sumSquaredError / totalPoints;
+        hudMse.innerText = (mse / 100).toFixed(2); 
+
+        // Compute discrete partitions classifications matrix map counters
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+
+        dataPoints.forEach(p => {
+            let predictedLabel = p.currentPrediction <= binaryCutoffY ? 1 : 0;
+
+            if (p.discreteLabel === 1 && predictedLabel === 1) tp++;
+            else if (p.discreteLabel === 0 && predictedLabel === 0) tn++;
+            else if (p.discreteLabel === 0 && predictedLabel === 1) fp++;
+            else if (p.discreteLabel === 1 && predictedLabel === 0) fn++;
+        });
+
+        countTp.innerText = tp;
+        countTn.innerText = tn;
+        countFp.innerText = fp;
+        countFn.innerText = fn;
+
+        let rowPosTotal = tp + fn;
+        let rowNegTotal = fp + tn;
+        let colPosTotal = tp + fp;
+        let colNegTotal = fn + tn;
+        let grandTotal = tp + tn + fp + fn;
+
+        totalRowPos.innerText = rowPosTotal;
+        totalRowNeg.innerText = rowNegTotal;
+        totalColPos.innerText = colPosTotal;
+        totalColNeg.innerText = colNegTotal;
+        totalGrand.innerText = grandTotal;
+
+        let tpPct = rowPosTotal > 0 ? (tp / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fnPct = rowPosTotal > 0 ? (fn / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fpPct = rowNegTotal > 0 ? (fp / rowNegTotal * 100).toFixed(1) : '0.0';
+        let tnPct = rowNegTotal > 0 ? (tn / rowNegTotal * 100).toFixed(1) : '0.0';
+
+        pctTp.innerText = `${tpPct}%`;
+        pctFn.innerText = `${fnPct}%`;
+        pctFp.innerText = `${fpPct}%`;
+        pctTn.innerText = `${tnPct}%`;
+
+        // Calculate rates statistics profiles
+        let accuracy = grandTotal > 0 ? (tp + tn) / grandTotal : 0;
+        mValAccuracy.innerText = `${(accuracy * 100).toFixed(1)}%`;
+
+        const targetClassIsPositive = document.querySelector('input[name="metricClassTarget"]:checked').value === "1";
+
+        if (targetClassIsPositive) {
+            precisionLabelText.innerText = "Precision";
+            recallLabelText.innerText = "Sensitivity (Recall)";
+            specificityLabelText.innerText = "Specificity";
+
+            precisionCardDesc.title = "Precision = TP / (TP + FP)";
+            recallCardDesc.title = "Sensitivity = TP / (TP + FN)";
+            specificityCardDesc.title = "Specificity = TN / (TN + FP)";
+
+            let precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+            let recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+            let specificity = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+
+            mValPrecision.innerText = (tp + fp) > 0 ? `${(precision * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tp + fn) > 0 ? `${(recall * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tn + fp) > 0 ? `${(specificity * 100).toFixed(1)}%` : "0.0%";
+        } else {
+            precisionLabelText.innerText = "Precision (-)";
+            recallLabelText.innerText = "Specificity (Recall -)";
+            specificityLabelText.innerText = "Sensitivity (-)";
+
+            precisionCardDesc.title = "Precision (-) = TN / (TN + FN)";
+            recallCardDesc.title = "Specificity (Recall -) = TN / (TN + FP)";
+            specificityCardDesc.title = "Sensitivity (-) = TP / (TP + FN)";
+
+            let precisionNeg = (tn + fn) > 0 ? tn / (tn + fn) : 0;
+            let recallNeg = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+            let specificityNeg = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+
+            mValPrecision.innerText = (tn + fn) > 0 ? `${(precisionNeg * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tn + fp) > 0 ? `${(recallNeg * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tp + fn) > 0 ? `${(specificityNeg * 100).toFixed(1)}%` : "0.0%";
+        }
+    }
+
+    function resetEngine() {
+        generateData();
+        render();
+    }
+
+    // Graphical Render Loop Engine Pipeline
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw horizontal baseline zero residual track mapping
+        ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(0, canvas.height * 0.5); ctx.lineTo(canvas.width, canvas.height * 0.5); ctx.stroke();
+        
+        // Draw discrete classification cutoff threshold line indicator
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(0, binaryCutoffY); ctx.lineTo(canvas.width, binaryCutoffY); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Render continuous ensemble line tracking output predictions gracefully
+        ctx.strokeStyle = 'rgba(22, 163, 74, 0.8)'; ctx.lineWidth = 4;
+        ctx.beginPath();
+        dataPoints.forEach((p, idx) => {
+            if (idx === 0) ctx.moveTo(p.x, p.currentPrediction);
+            else ctx.lineTo(p.x, p.currentPrediction);
+        });
+        ctx.stroke();
+
+        // Render current active iteration tree splitting threshold boundaries
+        if(treesPool.length > 0) {
+            let lastTree = treesPool[treesPool.length - 1];
+            ctx.strokeStyle = 'rgba(37, 99, 235, 0.3)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(lastTree.splitX, 0); ctx.lineTo(lastTree.splitX, canvas.height); ctx.stroke();
+        }
+
+        // Draw Data Points Metrics Node Plots
+        dataPoints.forEach(p => {
+            // 1. Draw True Target Coordinates (Black Dots)
+            ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a'; ctx.fill();
+
+            // 2. Draw residual error vectors lines directly pointing toward ground truth targets
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.currentPrediction); ctx.stroke();
+
+            // 3. Draw mapped Residual points normalized around baseline axis (Red Dots)
+            let visualResidualY = (canvas.height * 0.5) - (p.y - p.currentPrediction);
+            ctx.beginPath(); ctx.arc(p.x, visualResidualY, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#dc2626'; ctx.fill(); // Explicitly override with custom red hex token!
+        });
+    }
+
+    // Event UI Hooks Bindings
+    lrSlider.addEventListener('input', (e) => { lrVal.innerText = parseFloat(e.target.value).toFixed(2); });
+    btnStepTree.addEventListener('click', stepEnsembleBoosting);
+    btnRunAll.addEventListener('click', runBatchTraining);
+    btnReset.addEventListener('click', resetEngine);
+
+    document.querySelectorAll('input[name="metricClassTarget"]').forEach(radio => {
+        radio.addEventListener('change', evaluateMatrixAndMetrics);
+    });
+
+    // Initial Bootstrap run sequencing configurations
+    setTimeout(() => {
+        resizeCanvas();
+    }, 100);
+</script>
+</body>
+</html>

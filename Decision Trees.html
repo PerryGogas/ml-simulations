@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Decision Tree Classifier Sandbox</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --class-a: #dc2626; /* Pure Red */
+            --class-b: #2563eb; /* Pure Blue */
+            
+            /* Light matching variations for Confusion Matrix cells */
+            --cm-red-correct: #fee2e2;   /* Soft red background for TP (Actual Red / Pred Red) */
+            --cm-red-text: #991b1b;
+            --cm-blue-correct: #dbeafe;  /* Soft blue background for TN (Actual Blue / Pred Blue) */
+            --cm-blue-text: #1e40af;
+            --cm-error: #f1f5f9;         /* Neutral light gray for misclassifications */
+            --cm-error-text: #475569;
+
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1150px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 480px;
+        }
+
+        /* Confusion Matrix Grid layout */
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr 80px;
+            grid-template-rows: 40px 1fr 1fr 60px;
+            gap: 8px;
+            margin: 15px 0;
+            text-align: center;
+            align-items: stretch;
+        }
+
+        .matrix-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .matrix-box {
+            padding: 12px 5px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .box-tp { background-color: var(--cm-red-correct); color: var(--cm-red-text); }
+        .box-tn { background-color: var(--cm-blue-correct); color: var(--cm-blue-text); }
+        .box-fp { background-color: var(--cm-error); color: var(--cm-error-text); }
+        .box-fn { background-color: var(--cm-error); color: var(--cm-error-text); }
+
+        .matrix-count { font-size: 1.5rem; font-weight: 800; }
+        .matrix-pct { font-size: 0.85rem; font-weight: 600; opacity: 0.9; margin-top: 2px; }
+        .matrix-title { font-size: 0.7rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .radio-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #cbd5e1;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .toggle-group-wrap {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+
+        .toggle-label {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #475569;
+        }
+
+        input[type="radio"] { display: none; }
+
+        #classA-label { color: var(--class-a); }
+        #classA-radio:checked + #classA-label { border-color: var(--class-a); background: #fef2f2; }
+        
+        #classB-label { color: var(--class-b); }
+        #classB-radio:checked + #classB-label { border-color: var(--class-b); background: #eff6ff; }
+
+        #metricTargetA:checked ~ .metric-toggle-group label[for="metricTargetA"],
+        #metricTargetB:checked ~ .metric-toggle-group label[for="metricTargetB"] {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .status-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            border-top: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            justify-content: center;
+            margin-top: 5px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-block { width: 15px; height: 15px; display: inline-block; border-radius: 3px; }
+
+        /* Metrics grid layout */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value { font-size: 1.4rem; font-weight: bold; color: var(--primary); margin-top: 2px;}
+        .metric-name { font-size: 0.75rem; font-weight: bold; color: #64748b; text-transform: uppercase;}
+
+        /* --- TREE CORE CONNECTOR FLOWCHART LINES CSS --- */
+        .tf-tree {
+            width: 100%;
+        }
+        .tf-tree ul {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            padding-top: 24px;
+            margin: 0;
+            padding-left: 0;
+        }
+        .tf-tree li {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 0 12px;
+            list-style-type: none;
+        }
+        /* Horizontal split lines linking nodes across columns */
+        .tf-tree li::before, .tf-tree li::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 50%;
+            width: 50%;
+            height: 24px;
+            border-top: 2px solid #cbd5e1;
+        }
+        .tf-tree li::after {
+            right: auto;
+            left: 50%;
+            border-left: 2px solid #cbd5e1;
+        }
+        .tf-tree li:only-child::after, .tf-tree li:only-child::before {
+            display: none;
+        }
+        .tf-tree li:only-child { 
+            padding-top: 0; 
+        }
+        .tf-tree li:first-child::before, .tf-tree li:last-child::after {
+            border-top: none !important;
+        }
+        .tf-tree li:last-child::before {
+            border-right: 2px solid #cbd5e1;
+        }
+        /* Vertical drop-down trunk line from parent element cards */
+        .tf-tree ul::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 2px;
+            height: 24px;
+            background: #cbd5e1;
+        }
+        /* Hide connection artifacts for root node wrapper */
+        .tf-tree > ul::before {
+            display: none;
+        }
+        .tf-tree > ul {
+            padding-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Interactive Decision Tree Sandbox</h1>
+        <p>Explore axis-aligned space splitting, information gain partitioning, and overfitting thresholds live.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="treeCanvas"></canvas>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="color-block" style="background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.3)"></span> Red Prediction Space</div>
+                <div class="legend-item"><span class="color-block" style="background:rgba(37,99,235,0.15); border:1px solid rgba(37,99,235,0.3)"></span> Blue Prediction Space</div>
+                <div class="legend-item"><span style="width: 15px; height: 2px; border-top: 2px dashed #0f172a; display: inline-block; vertical-align: middle;"></span> Splitting Splits</div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569;">Confusion Matrix (Training Set Evaluation)</div>
+            <div class="matrix-container">
+                <div class="matrix-label"></div>
+                <div class="matrix-label" style="color: var(--class-a);">Predicted Red (+)</div>
+                <div class="matrix-label" style="color: var(--class-b);">Predicted Blue (-)</div>
+                <div class="matrix-label" style="color: #475569;">Total</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-a);">Actual Red</div>
+                <div class="matrix-box box-tp" id="m-tp">
+                    <span class="matrix-count" id="count-tp">0</span>
+                    <span class="matrix-pct" id="pct-tp">0.0%</span>
+                    <span class="matrix-title">True Red (TP)</span>
+                </div>
+                <div class="matrix-box box-fn" id="m-fn">
+                    <span class="matrix-count" id="count-fn">0</span>
+                    <span class="matrix-pct" id="pct-fn">0.0%</span>
+                    <span class="matrix-title">False Blue (FN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-pos">0</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-b);">Actual Blue</div>
+                <div class="matrix-box box-fp" id="m-fp">
+                    <span class="matrix-count" id="count-fp">0</span>
+                    <span class="matrix-pct" id="pct-fp">0.0%</span>
+                    <span class="matrix-title">False Red (FP)</span>
+                </div>
+                <div class="matrix-box box-tn" id="m-tn">
+                    <span class="matrix-count" id="count-tn">0</span>
+                    <span class="matrix-pct" id="pct-tn">0.0%</span>
+                    <span class="matrix-title">True Blue (TN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-neg">0</div>
+
+                <div class="matrix-label" style="color: #475569;">Total</div>
+                <div class="matrix-total-cell" id="total-col-pos">0</div>
+                <div class="matrix-total-cell" id="total-col-neg">0</div>
+                <div class="matrix-total-cell" id="total-grand" style="background-color: #cbd5e1; color: #0f172a;">0</div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:15px 0;">
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569; margin-bottom: 10px;">🌳 Hierarchical Tree Structure Flowchart</div>
+            <div id="treeStructureContainer" style="display: flex; justify-content: center; overflow-x: auto; padding: 15px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; min-height: 80px;"></div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>1. Select Class to Plot</label>
+                <div class="radio-group">
+                    <input type="radio" id="classA-radio" name="classSelect" value="1" checked>
+                    <label for="classA-radio" id="classA-label" class="radio-label">
+                        <span style="width:10px; height:10px; background:var(--class-a); border-radius:50%;"></span> Class +1 (Red)
+                    </label>
+
+                    <input type="radio" id="classB-radio" name="classSelect" value="-1">
+                    <label for="classB-radio" id="classB-label" class="radio-label">
+                        <span style="width:10px; height:10px; background:var(--class-b); border-radius:50%;"></span> Class -1 (Blue)
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="depthSlider">2. Maximum Growth Depth (Tree Depth)</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Max Depth Bound</span><span id="depthVal" style="color:var(--primary)">3</span></div>
+                    <input type="range" id="depthSlider" min="1" max="5" value="3" step="1">
+                </div>
+                <span style="font-size:0.7rem; color:#64748b;">Shallow depths create broad generalized stumps (underfitting). High growth bounds create intricate checkerboards wrapping individual coordinates (overfitting).</span>
+            </div>
+
+            <button id="btnSample" class="btn-secondary">Load Quadrant Checkerboard Sample</button>
+            <button id="btnClear" class="btn-danger">Clear Graph Canvas</button>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>3. Select Target Focus Class for Metrics Calculations</label>
+                <input type="radio" id="metricTargetA" name="metricClassTarget" value="1" checked>
+                <input type="radio" id="metricTargetB" name="metricClassTarget" value="-1">
+                <div class="metric-toggle-group toggle-group-wrap">
+                    <label for="metricTargetA" class="toggle-label">Red Class (+)</label>
+                    <label for="metricTargetB" class="toggle-label">Blue Class (-)</label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Derived Evaluation Metrics Calculations</label>
+                <div class="metrics-grid">
+                    <div class="metric-card" title="Accuracy = (TP + TN) / Total">
+                        <div class="metric-name">Accuracy</div>
+                        <div class="metric-value" id="mVal-accuracy">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="precision-card-desc" title="Precision = TP / (TP + FP)">
+                        <div class="metric-name" id="precision-label-text">Precision</div>
+                        <div class="metric-value" id="mVal-precision">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="recall-card-desc" title="Recall (Sensitivity) = TP / (TP + FN)">
+                        <div class="metric-name" id="recall-label-text">Sensitivity (Recall)</div>
+                        <div class="metric-value" id="mVal-recall">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="specificity-card-desc" title="Specificity = TN / (TN + FP)">
+                        <div class="metric-name" id="specificity-label-text">Specificity</div>
+                        <div class="metric-value" id="mVal-specificity">0.0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="status-box" id="hudStatus">
+                <strong>Model Status: Optimization Active</strong><br>
+                Plot discrete elements on the coordinate plane to watch recursive axis splits form in real-time.
+            </div>
+            
+            <div class="card" style="background:#f8fafc; padding:12px; font-size:0.8rem; box-shadow:none; line-height:1.4;">
+                <strong>🔬 Classroom Experiment:</strong> Load the quadrant sample and push Depth up to 5. Look at how perfectly straight vertical and horizontal grid partitions are drawn across the coordinate landscape. This highlights why decision trees are orthogonal space cutters!
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('treeCanvas');
+    const ctx = canvas.getContext('2d');
+    const depthSlider = document.getElementById('depthSlider');
+    const depthVal = document.getElementById('depthVal');
+    const btnSample = document.getElementById('btnSample');
+    const btnClear = document.getElementById('btnClear');
+    const hudStatus = document.getElementById('hudStatus');
+    const metricTargetA = document.getElementById('metricTargetA');
+    const metricTargetB = document.getElementById('metricTargetB');
+    const treeStructureContainer = document.getElementById('treeStructureContainer');
+
+    // Confusion Matrix links
+    const countTp = document.getElementById('count-tp');
+    const countTn = document.getElementById('count-tn');
+    const countFp = document.getElementById('count-fp');
+    const countFn = document.getElementById('count-fn');
+
+    const pctTp = document.getElementById('pct-tp');
+    const pctTn = document.getElementById('pct-tn');
+    const pctFp = document.getElementById('pct-fp');
+    const pctFn = document.getElementById('pct-fn');
+
+    const totalRowPos = document.getElementById('total-row-pos');
+    const totalRowNeg = document.getElementById('total-row-neg');
+    const totalColPos = document.getElementById('total-col-pos');
+    const totalColNeg = document.getElementById('total-col-neg');
+    const totalGrand = document.getElementById('total-grand');
+
+    // Rates anchors
+    const mValAccuracy = document.getElementById('mVal-accuracy');
+    const mValPrecision = document.getElementById('mVal-precision');
+    const mValRecall = document.getElementById('mVal-recall');
+    const mValSpecificity = document.getElementById('mVal-specificity');
+
+    const precisionLabelText = document.getElementById('precision-label-text');
+    const recallLabelText = document.getElementById('recall-label-text');
+    const specificityLabelText = document.getElementById('specificity-label-text');
+    
+    const precisionCardDesc = document.getElementById('precision-card-desc');
+    const recallCardDesc = document.getElementById('recall-card-desc');
+    const specificityCardDesc = document.getElementById('specificity-card-desc');
+
+    let points = [];
+    let treeRoot = null;
+    let maxDepth = 3;
+
+    const HEX_RED = '#dc2626';
+    const HEX_BLUE = '#2563eb';
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 480;
+        if(points.length === 0) loadQuadrantSample();
+        else {
+            trainDecisionTree();
+            render();
+        }
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const label = document.querySelector('input[name="classSelect"]:checked').value === "1" ? 1 : -1;
+
+        points.push({ x, y, label });
+        trainDecisionTree();
+        render();
+    });
+
+    function loadQuadrantSample() {
+        points = [];
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Structured cross checkerboard quadrant data mapping
+        const coordinatesList = [
+            // Top Left Quadrant (Red)
+            {cx: 0.25, cy: 0.25, lbl: 1}, {cx: 0.35, cy: 0.20, lbl: 1}, {cx: 0.20, cy: 0.35, lbl: 1},
+            // Bottom Right Quadrant (Red)
+            {cx: 0.75, cy: 0.75, lbl: 1}, {cx: 0.65, cy: 0.80, lbl: 1}, {cx: 0.80, cy: 0.65, lbl: 1},
+            // Top Right Quadrant (Blue)
+            {cx: 0.75, cy: 0.25, lbl: -1}, {cx: 0.65, cy: 0.20, lbl: -1}, {cx: 0.80, cy: 0.35, lbl: -1},
+            // Bottom Left Quadrant (Blue)
+            {cx: 0.25, cy: 0.75, lbl: -1}, {cx: 0.35, cy: 0.80, lbl: -1}, {cx: 0.20, cy: 0.65, lbl: -1}
+        ];
+
+        coordinatesList.forEach(c => {
+            points.push({
+                x: w * c.cx + (Math.random() - 0.5) * 30,
+                y: h * c.cy + (Math.random() - 0.5) * 30,
+                label: c.lbl
+            });
+        });
+
+        trainDecisionTree();
+        render();
+    }
+
+    // --- RECURSIVE MACHINE LEARNING DECISION TREE ALGORITHM MECHANICS ---
+    function calculateGiniImpurity(subset) {
+        if (subset.length === 0) return 0;
+        let pos = subset.filter(p => p.label === 1).length;
+        let neg = subset.length - pos;
+        let pPos = pos / subset.length;
+        let pNeg = neg / subset.length;
+        return 1 - (pPos * pPos + pNeg * pNeg);
+    }
+
+    function findBestFeatureSplit(subset) {
+        let bestGini = Infinity;
+        let bestFeature = null; // 'x' or 'y'
+        let bestThreshold = 0;
+
+        if (subset.length < 2) return null;
+
+        // 1. Scan candidate feature thresholds along X axis horizontal plane cuts
+        for (let i = 0; i < subset.length; i++) {
+            let thresh = subset[i].x;
+            let left = subset.filter(p => p.x <= thresh);
+            let right = subset.filter(p => p.x > thresh);
+            if (left.length === 0 || right.length === 0) continue;
+
+            let weightedGini = (left.length / subset.length) * calculateGiniImpurity(left) + (right.length / subset.length) * calculateGiniImpurity(right);
+            if (weightedGini < bestGini) {
+                bestGini = weightedGini;
+                bestFeature = 'x';
+                bestThreshold = thresh;
+            }
+        }
+
+        // 2. Scan candidate feature thresholds along Y axis vertical plane cuts
+        for (let i = 0; i < subset.length; i++) {
+            let thresh = subset[i].y;
+            let left = subset.filter(p => p.y <= thresh);
+            let right = subset.filter(p => p.y > thresh);
+            if (left.length === 0 || right.length === 0) continue;
+
+            let weightedGini = (left.length / subset.length) * calculateGiniImpurity(left) + (right.length / subset.length) * calculateGiniImpurity(right);
+            if (weightedGini < bestGini) {
+                bestGini = weightedGini;
+                bestFeature = 'y';
+                bestThreshold = thresh;
+            }
+        }
+
+        if (bestFeature === null) return null;
+        return { feature: bestFeature, threshold: bestThreshold };
+    }
+
+    function recursiveBuildTree(subset, currentDepth) {
+        let posCount = subset.filter(p => p.label === 1).length;
+        let negCount = subset.length - posCount;
+        let majorityLabel = posCount >= negCount ? 1 : -1;
+        let currentGini = calculateGiniImpurity(subset);
+
+        // Terminal leaf criteria validation checks
+        if (currentDepth >= maxDepth || posCount === subset.length || negCount === subset.length || subset.length < 2) {
+            return { isLeaf: true, label: majorityLabel, samples: subset.length, gini: currentGini };
+        }
+
+        let optimalSplit = findBestFeatureSplit(subset);
+        if (!optimalSplit) {
+            return { isLeaf: true, label: majorityLabel, samples: subset.length, gini: currentGini };
+        }
+
+        let leftBranchPoints = subset.filter(p => p[optimalSplit.feature] <= optimalSplit.threshold);
+        let rightBranchPoints = subset.filter(p => p[optimalSplit.feature] > optimalSplit.threshold);
+
+        if (leftBranchPoints.length === 0 || rightBranchPoints.length === 0) {
+            return { isLeaf: true, label: majorityLabel, samples: subset.length, gini: currentGini };
+        }
+
+        return {
+            isLeaf: false,
+            feature: optimalSplit.feature,
+            threshold: optimalSplit.threshold,
+            samples: subset.length,
+            gini: currentGini,
+            left: recursiveBuildTree(leftBranchPoints, currentDepth + 1),
+            right: recursiveBuildTree(rightBranchPoints, currentDepth + 1)
+        };
+    }
+
+    function evaluateTreePrediction(node, coordinates) {
+        if (!node) return 0;
+        if (node.isLeaf) return node.label;
+        if (coordinates[node.feature] <= node.threshold) {
+            return evaluateTreePrediction(node.left, coordinates);
+        } else {
+            return evaluateTreePrediction(node.right, coordinates);
+        }
+    }
+
+    // --- RECURSIVE HTML FLOWCHART BUILDER SUBROUTINE ---
+    function generateTreeStructureHTML(node, isLeftChild = null) {
+        if (!node) return '';
+        
+        let giniText = `Gini: ${node.gini.toFixed(2)}`;
+        let samplesText = `Samples: ${node.samples}`;
+        let badge = '';
+        
+        if (isLeftChild === true) {
+            badge = `<span style="position: absolute; top: 4px; font-size: 0.62rem; font-weight: 800; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1px 4px; border-radius: 4px; z-index: 3; transform: translateX(-50%); left: 50%; white-space: nowrap;">&le; (Yes)</span>`;
+        } else if (isLeftChild === false) {
+            badge = `<span style="position: absolute; top: 4px; font-size: 0.62rem; font-weight: 800; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 1px 4px; border-radius: 4px; z-index: 3; transform: translateX(-50%); left: 50%; white-space: nowrap;">&gt; (No)</span>`;
+        }
+
+        let paddingTop = (isLeftChild !== null) ? 'padding-top: 30px;' : '';
+
+        if (node.isLeaf) {
+            let colorHex = node.label === 1 ? 'var(--class-a)' : 'var(--class-b)';
+            let nameClass = node.label === 1 ? 'Red Class (+1)' : 'Blue Class (-1)';
+            return `
+                <li style="${paddingTop}">
+                    ${badge}
+                    <div style="display: flex; flex-direction: column; align-items: center; background: #ffffff; border: 2px solid ${colorHex}; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); min-width: 120px; text-align: center; position: relative;">
+                        <span style="font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing:0.02em;">Leaf Node</span>
+                        <span style="font-size: 0.85rem; font-weight: 800; color: ${colorHex}; margin: 2px 0;">${nameClass}</span>
+                        <span style="font-size: 0.7rem; color: #475569; font-weight:500;">${samplesText}</span>
+                        <span style="font-size: 0.7rem; color: #94a3b8;">${giniText}</span>
+                    </div>
+                </li>
+            `;
+        } else {
+            return `
+                <li style="${paddingTop}">
+                    ${badge}
+                    <div style="background: #0f172a; color: #ffffff; border-radius: 8px; padding: 8px 14px; font-size: 0.8rem; font-weight: 700; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.15); min-width: 140px; border: 1px solid #1e293b; position: relative; z-index: 2;">
+                        Split: Feature ${node.feature.toUpperCase()}<br>
+                        <span style="color: #38bdf8; font-size: 0.8rem; font-weight:800;">&le; ${node.threshold.toFixed(0)} px</span>
+                        <div style="font-size: 0.65rem; color: #94a3b8; font-weight: normal; margin-top: 4px; border-top: 1px solid #334155; padding-top: 4px;">
+                            ${samplesText} | ${giniText}
+                        </div>
+                    </div>
+                    <ul>
+                        ${generateTreeStructureHTML(node.left, true)}
+                        ${generateTreeStructureHTML(node.right, false)}
+                    </ul>
+                </li>
+            `;
+        }
+    }
+
+    function trainDecisionTree() {
+        if (points.length === 0) {
+            treeRoot = null;
+            treeStructureContainer.innerHTML = `<span style="color:#94a3b8; font-size:0.85rem; font-style:italic;">No points plotted to form branches.</span>`;
+            evaluateConfusionMatrixAndMetrics(0, 0, 0, 0);
+            return;
+        }
+
+        treeRoot = recursiveBuildTree(points, 0);
+        
+        // Push recursive layout template inside the structural diagram connector ruleset container
+        treeStructureContainer.innerHTML = `<div class="tf-tree"><ul>${generateTreeStructureHTML(treeRoot)}</ul></div>`;
+
+        let nodeCount = countTreeNodesNodes(treeRoot);
+        hudStatus.innerHTML = `<strong>🎯 Decision Tree Grown Successfully!</strong><br>Space partition map computed. Total structure matrix contains <b>${nodeCount} splitting / leaf regions</b>.`;
+
+        calculateGlobalConfusionMatrix();
+    }
+
+    function countTreeNodesNodes(node) {
+        if (!node) return 0;
+        if (node.isLeaf) return 1;
+        return 1 + countTreeNodesNodes(node.left) + countTreeNodesNodes(node.right);
+    }
+
+    // --- EVALUATION CONFUSION MATRIX MECHANICS ---
+    function calculateGlobalConfusionMatrix() {
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+
+        points.forEach(p => {
+            let predLabel = evaluateTreePrediction(treeRoot, p);
+
+            if (p.label === 1 && predLabel === 1) tp++;
+            else if (p.label === -1 && predLabel === -1) tn++;
+            else if (p.label === -1 && predLabel === 1) fp++;
+            else if (p.label === 1 && predLabel === -1) fn++;
+        });
+
+        evaluateConfusionMatrixAndMetrics(tp, tn, fp, fn);
+    }
+
+    function evaluateConfusionMatrixAndMetrics(tp, tn, fp, fn) {
+        countTp.innerText = tp;
+        countTn.innerText = tn;
+        countFp.innerText = fp;
+        countFn.innerText = fn;
+
+        let rowPosTotal = tp + fn;
+        let rowNegTotal = fp + tn;
+        let colPosTotal = tp + fp;
+        let colNegTotal = fn + tn;
+        let grandTotal = tp + tn + fp + fn;
+
+        totalRowPos.innerText = rowPosTotal;
+        totalRowNeg.innerText = rowNegTotal;
+        totalColPos.innerText = colPosTotal;
+        totalColNeg.innerText = colNegTotal;
+        totalGrand.innerText = grandTotal;
+
+        let tpPct = rowPosTotal > 0 ? (tp / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fnPct = rowPosTotal > 0 ? (fn / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fpPct = rowNegTotal > 0 ? (fp / rowNegTotal * 100).toFixed(1) : '0.0';
+        let tnPct = rowNegTotal > 0 ? (tn / rowNegTotal * 100).toFixed(1) : '0.0';
+
+        pctTp.innerText = `${tpPct}%`;
+        pctFn.innerText = `${fnPct}%`;
+        pctFp.innerText = `${fpPct}%`;
+        pctTn.innerText = `${tnPct}%`;
+
+        // Derived summary metrics updates
+        let accuracy = grandTotal > 0 ? (tp + tn) / grandTotal : 0;
+        mValAccuracy.innerText = `${(accuracy * 100).toFixed(1)}%`;
+
+        const targetClassIsPositive = document.querySelector('input[name="metricClassTarget"]:checked').value === "1";
+
+        if (targetClassIsPositive) {
+            precisionLabelText.innerText = "Precision";
+            recallLabelText.innerText = "Sensitivity (Recall)";
+            specificityLabelText.innerText = "Specificity";
+
+            precisionCardDesc.title = "Precision = TP / (TP + FP)";
+            recallCardDesc.title = "Sensitivity = TP / (TP + FN)";
+            specificityCardDesc.title = "Specificity = TN / (TN + FP)";
+
+            let precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+            let recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+            let specificity = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+
+            mValPrecision.innerText = (tp + fp) > 0 ? `${(precision * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tp + fn) > 0 ? `${(recall * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tn + fp) > 0 ? `${(specificity * 100).toFixed(1)}%` : "0.0%";
+        } else {
+            precisionLabelText.innerText = "Precision (-)";
+            recallLabelText.innerText = "Specificity (Recall -)";
+            specificityLabelText.innerText = "Sensitivity (-)";
+
+            precisionCardDesc.title = "Precision (-) = TN / (TN + FN)";
+            recallCardDesc.title = "Specificity (Recall -) = TN / (TN + FP)";
+            specificityCardDesc.title = "Sensitivity (-) = TP / (TP + FN)";
+
+            let precisionNeg = (tn + fn) > 0 ? tn / (tn + fn) : 0;
+            let recallNeg = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+            let specificityNeg = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+
+            mValPrecision.innerText = (tn + fn) > 0 ? `${(precisionNeg * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tn + fp) > 0 ? `${(recallNeg * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tp + fn) > 0 ? `${(specificityNeg * 100).toFixed(1)}%` : "0.0%";
+        }
+    }
+
+    // --- GRAPHICAL CANVAS RENDER HOOPS LOOP ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Plot soft color filled background prediction cells bounding layers
+        if (points.length > 0 && treeRoot) {
+            const step = 4;
+            for (let x = 0; x < canvas.width; x += step) {
+                for (let y = 0; y < canvas.height; y += step) {
+                    let pred = evaluateTreePrediction(treeRoot, { x: x + step/2, y: y + step/2 });
+                    ctx.fillStyle = pred === 1 ? 'rgba(220, 38, 38, 0.04)' : 'rgba(37, 99, 235, 0.04)';
+                    ctx.fillRect(x, y, step, step);
+                }
+            }
+
+            // 2. Recursively overlay orthogonal splitting lines thresholds across sub-space regions
+            drawSplitLinesBounds(treeRoot, 0, canvas.width, 0, canvas.height);
+        }
+
+        // Draw structural layout plane grid backdrop mesh
+        ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
+        for (let i = 40; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+        for (let i = 40; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+        // Draw instances coordinates dots circles
+        points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = p.label === 1 ? HEX_RED : HEX_BLUE;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+        });
+    }
+
+    function drawSplitLinesBounds(node, minX, maxX, minY, maxY) {
+        if (!node || node.isLeaf) return;
+
+        ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+
+        if (node.feature === 'x') {
+            ctx.moveTo(node.threshold, minY);
+            ctx.lineTo(node.threshold, maxY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Branch down left and right children mapping geometry constraints bounds
+            drawSplitLinesBounds(node.left, minX, node.threshold, minY, maxY);
+            drawSplitLinesBounds(node.right, node.threshold, maxX, minY, maxY);
+        } else {
+            ctx.moveTo(minX, node.threshold);
+            ctx.lineTo(maxX, node.threshold);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            drawSplitLinesBounds(node.left, minX, maxX, minY, node.threshold);
+            drawSplitLinesBounds(node.right, minX, maxX, node.threshold, maxY);
+        }
+    }
+
+    // Listeners registrations
+    depthSlider.addEventListener('input', (e) => {
+        maxDepth = parseInt(e.target.value);
+        depthVal.innerText = maxDepth;
+        trainDecisionTree();
+        render();
+    });
+
+    [metricTargetA, metricTargetB].forEach(radio => {
+        radio.addEventListener('change', calculateGlobalConfusionMatrix);
+    });
+
+    btnSample.addEventListener('click', loadQuadrantSample);
+    btnClear.addEventListener('click', () => { points = []; treeRoot = null; hudStatus.innerHTML = `<strong>Model Status: Ready</strong><br>Plot custom coordinates to watch split boundaries update live.`; treeStructureContainer.innerHTML = `<span style="color:#94a3b8; font-size:0.85rem; font-style:italic;">No points plotted to form branches.</span>`; evaluateConfusionMatrixAndMetrics(0,0,0,0); render(); });
+
+    // Initial sequence startup configuration bootstrap setup
+    setTimeout(() => { resizeCanvas(); }, 100);
+</script>
+</body>
+</html>

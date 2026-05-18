@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive RBF Kernel SVM Sandbox</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --class-a: #dc2626; /* Red */
+            --class-b: #2563eb; /* Blue */
+            
+            /* Light matching variations for Confusion Matrix cells */
+            --cm-red-correct: #fee2e2;   /* Soft red background for TP (Actual Red / Pred Red) */
+            --cm-red-text: #991b1b;
+            --cm-blue-correct: #dbeafe;  /* Soft blue background for TN (Actual Blue / Pred Blue) */
+            --cm-blue-text: #1e40af;
+            --cm-error: #f1f5f9;         /* Neutral light gray for misclassifications FN/FP */
+            --cm-error-text: #475569;
+
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 { margin-bottom: 5px; color: #0f172a; }
+        p { color: #64748b; margin-top: 0; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1150px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 480px;
+        }
+
+        /* Confusion Matrix Grid layout */
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr 80px;
+            grid-template-rows: 40px 1fr 1fr 60px;
+            gap: 8px;
+            margin: 15px 0;
+            text-align: center;
+            align-items: stretch;
+        }
+
+        .matrix-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .matrix-box {
+            padding: 12px 5px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .box-tp { background-color: var(--cm-red-correct); color: var(--cm-red-text); }
+        .box-tn { background-color: var(--cm-blue-correct); color: var(--cm-blue-text); }
+        .box-fp { background-color: var(--cm-error); color: var(--cm-error-text); }
+        .box-fn { background-color: var(--cm-error); color: var(--cm-error-text); }
+
+        .matrix-count { font-size: 1.5rem; font-weight: 800; }
+        .matrix-pct { font-size: 0.85rem; font-weight: 600; opacity: 0.9; margin-top: 2px; }
+        .matrix-title { font-size: 0.7rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+        .matrix-total-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .radio-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #cbd5e1;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .metric-toggle-group {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+
+        .toggle-label {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #475569;
+        }
+
+        input[type="radio"] { display: none; }
+
+        #classA-label { color: var(--class-a); }
+        #classA-radio:checked + #classA-label { border-color: var(--class-a); background: #fef2f2; }
+        
+        #classB-label { color: var(--class-b); }
+        #classB-radio:checked + #classB-label { border-color: var(--class-b); background: #eff6ff; }
+
+        #metricTargetA:checked ~ .metric-toggle-group label[for="metricTargetA"],
+        #metricTargetB:checked ~ .metric-toggle-group label[for="metricTargetB"] {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .slider-wrap {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .status-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            border-top: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            justify-content: center;
+            margin-top: 5px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-block { width: 15px; height: 15px; display: inline-block; border-radius: 3px; }
+
+        /* Metrics grid layout */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value { font-size: 1.4rem; font-weight: bold; color: var(--primary); margin-top: 2px;}
+        .metric-name { font-size: 0.75rem; font-weight: bold; color: #64748b; text-transform: uppercase;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Non-Linear RBF Kernel SVM Visualizer</h1>
+        <p>Watch how a Support Vector Machine uses a radial kernel to map non-separable data spaces dynamically.</p>
+    </header>
+
+    <div class="layout">
+        <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="svmCanvas"></canvas>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="color-block" style="background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.3)"></span> Red Prediction Space</div>
+                <div class="legend-item"><span class="color-block" style="background:rgba(37,99,235,0.15); border:1px solid rgba(37,99,235,0.3)"></span> Blue Prediction Space</div>
+                <div class="legend-item"><span style="width: 15px; height: 2px; background: #0f172a; display: inline-block; vertical-align: middle;"></span> Decision Boundary</div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div style="text-align: center; font-weight: bold; font-size: 0.9rem; color: #475569;">Confusion Matrix (Training Set Evaluation)</div>
+            <div class="matrix-container">
+                <div class="matrix-label"></div>
+                <div class="matrix-label" style="color: var(--class-a);">Predicted Red (+)</div>
+                <div class="matrix-label" style="color: var(--class-b);">Predicted Blue (-)</div>
+                <div class="matrix-label" style="color: #475569;">Total</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-a);">Actual Red</div>
+                <div class="matrix-box box-tp" id="m-tp">
+                    <span class="matrix-count" id="count-tp">0</span>
+                    <span class="matrix-pct" id="pct-tp">0.0%</span>
+                    <span class="matrix-title">True Red (TP)</span>
+                </div>
+                <div class="matrix-box box-fn" id="m-fn">
+                    <span class="matrix-count" id="count-fn">0</span>
+                    <span class="matrix-pct" id="pct-fn">0.0%</span>
+                    <span class="matrix-title">False Blue (FN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-pos">0</div>
+
+                <div class="matrix-label" style="text-align: right; padding-right:10px; justify-content: flex-end; color: var(--class-b);">Actual Blue</div>
+                <div class="matrix-box box-fp" id="m-fp">
+                    <span class="matrix-count" id="count-fp">0</span>
+                    <span class="matrix-pct" id="pct-fp">0.0%</span>
+                    <span class="matrix-title">False Red (FP)</span>
+                </div>
+                <div class="matrix-box box-tn" id="m-tn">
+                    <span class="matrix-count" id="count-tn">0</span>
+                    <span class="matrix-pct" id="pct-tn">0.0%</span>
+                    <span class="matrix-title">True Blue (TN)</span>
+                </div>
+                <div class="matrix-total-cell" id="total-row-neg">0</div>
+
+                <div class="matrix-label" style="color: #475569;">Total</div>
+                <div class="matrix-total-cell" id="total-col-pos">0</div>
+                <div class="matrix-total-cell" id="total-col-neg">0</div>
+                <div class="matrix-total-cell" id="total-grand" style="background-color: #cbd5e1; color: #0f172a;">0</div>
+            </div>
+        </div>
+
+        <div class="card controls">
+            <div class="control-group">
+                <label>1. Select Class to Plot</label>
+                <div class="radio-group">
+                    <input type="radio" id="classA-radio" name="classSelect" value="1" checked>
+                    <label for="classA-radio" id="classA-label" class="radio-label">
+                        <span style="width:10px; height:10px; background:var(--class-a); border-radius:50%;"></span> Class +1 (Red)
+                    </label>
+
+                    <input type="radio" id="classB-radio" name="classSelect" value="-1">
+                    <label for="classB-radio" id="classB-label" class="radio-label">
+                        <span style="width:10px; height:10px; background:var(--class-b); border-radius:50%;"></span> Class -1 (Blue)
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>2. Kernel Sensitivity (Gamma: γ)</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>γ Coefficient</span><span id="gammaVal" style="color:var(--primary)">15.0</span></div>
+                    <input type="range" id="gammaSlider" min="1" max="50" value="15" step="1">
+                </div>
+                <span style="font-size:0.7rem; color:#64748b;">Higher values create highly localized decision pockets (potential overfitting). Lower values create broader, sweeping boundaries.</span>
+            </div>
+
+            <div class="control-group">
+                <label>3. Data Dispersion (Noise Level)</label>
+                <div class="slider-wrap">
+                    <div class="slider-header"><span>Variance Amplitude</span><span id="noiseVal" style="color:var(--primary)">15</span></div>
+                    <input type="range" id="noiseSlider" min="0" max="40" value="15" step="5">
+                </div>
+                <span style="font-size:0.7rem; color:#64748b;">Alters the radial spread and interlocking variance of the generated sample rings.</span>
+            </div>
+
+            <button id="btnSample" class="btn-secondary">Load Non-Separable (Circles) Sample</button>
+            <button id="btnClear" class="btn-danger">Clear Graph Canvas</button>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="control-group">
+                <label>4. Select Target Focus Class for Metrics Calculations</label>
+                <input type="radio" id="metricTargetA" name="metricClassTarget" value="1" checked>
+                <input type="radio" id="metricTargetB" name="metricClassTarget" value="-1">
+                <div class="metric-toggle-group">
+                    <label for="metricTargetA" class="toggle-label">Red Class (+)</label>
+                    <label for="metricTargetB" class="toggle-label">Blue Class (-)</label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Derived Evaluation Metrics Calculations</label>
+                <div class="metrics-grid">
+                    <div class="metric-card" title="Accuracy = (TP + TN) / Total">
+                        <div class="metric-name">Accuracy</div>
+                        <div class="metric-value" id="mVal-accuracy">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="precision-card-desc" title="Precision = TP / (TP + FP)">
+                        <div class="metric-name" id="precision-label-text">Precision</div>
+                        <div class="metric-value" id="mVal-precision">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="recall-card-desc" title="Recall (Sensitivity) = TP / (TP + FN)">
+                        <div class="metric-name" id="recall-label-text">Sensitivity (Recall)</div>
+                        <div class="metric-value" id="mVal-recall">0.0%</div>
+                    </div>
+                    <div class="metric-card" id="specificity-card-desc" title="Specificity = TN / (TN + FP)">
+                        <div class="metric-name" id="specificity-label-text">Specificity</div>
+                        <div class="metric-value" id="mVal-specificity">0.0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="width:100%; border:0; border-top:1px solid var(--border); margin:5px 0;">
+
+            <div class="status-box" id="hudStatus">
+                <strong>Model Status: Optimization Active</strong><br>
+                Plot coordinates to watch the RBF kernel dynamically snake around the clusters.
+            </div>
+            
+            <div class="card" style="background:#f8fafc; padding:12px; font-size:0.8rem; box-shadow:none; line-height:1.4;">
+                <strong>🔬 Classroom Experiment:</strong> Push Gamma up to 50 and Noise up to 35. Notice how the boundary contracts into tight isolations around individual nodes. Observe how this complex behavior shifts Accuracy closer to 100% on this training set, visually demonstrating training-set overfitting as localized radial pockets multiply!
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('svmCanvas');
+    const ctx = canvas.getContext('2d');
+    const gammaSlider = document.getElementById('gammaSlider');
+    const gammaVal = document.getElementById('gammaVal');
+    const noiseSlider = document.getElementById('noiseSlider');
+    const noiseVal = document.getElementById('noiseVal');
+    const btnSample = document.getElementById('btnSample');
+    const btnClear = document.getElementById('btnClear');
+    const hudStatus = document.getElementById('hudStatus');
+    const metricTargetA = document.getElementById('metricTargetA');
+    const metricTargetB = document.getElementById('metricTargetB');
+
+    // Confusion Matrix anchors
+    const countTp = document.getElementById('count-tp');
+    const countTn = document.getElementById('count-tn');
+    const countFp = document.getElementById('count-fp');
+    const countFn = document.getElementById('count-fn');
+
+    const pctTp = document.getElementById('pct-tp');
+    const pctTn = document.getElementById('pct-tn');
+    const pctFp = document.getElementById('pct-fp');
+    const pctFn = document.getElementById('pct-fn');
+
+    const totalRowPos = document.getElementById('total-row-pos');
+    const totalRowNeg = document.getElementById('total-row-neg');
+    const totalColPos = document.getElementById('total-col-pos');
+    const totalColNeg = document.getElementById('total-col-neg');
+    const totalGrand = document.getElementById('total-grand');
+
+    // Metrics anchors
+    const mValAccuracy = document.getElementById('mVal-accuracy');
+    const mValPrecision = document.getElementById('mVal-precision');
+    const mValRecall = document.getElementById('mVal-recall');
+    const mValSpecificity = document.getElementById('mVal-specificity');
+
+    const precisionLabelText = document.getElementById('precision-label-text');
+    const recallLabelText = document.getElementById('recall-label-text');
+    const specificityLabelText = document.getElementById('specificity-label-text');
+    
+    const precisionCardDesc = document.getElementById('precision-card-desc');
+    const recallCardDesc = document.getElementById('recall-card-desc');
+    const specificityCardDesc = document.getElementById('specificity-card-desc');
+
+    let points = [];
+    let baseRingPoints = []; // Cache reference coordinates to apply noise transform consistently
+    let alpha = []; 
+    let b = 0;      
+    let gamma = 15.0;
+
+    const HEX_RED = '#dc2626';
+    const HEX_BLUE = '#2563eb';
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 480;
+        if(points.length === 0) loadCircularSample();
+        else {
+            trainKernelSVM();
+            render();
+        }
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const label = document.querySelector('input[name="classSelect"]:checked').value === "1" ? 1 : -1;
+
+        baseRingPoints = []; // Manual insertions break template recreation constraints
+        points.push({ x, y, label });
+        trainKernelSVM();
+        render();
+    });
+
+    function loadCircularSample() {
+        baseRingPoints = [];
+        points = [];
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const currentNoise = parseFloat(noiseSlider.value);
+
+        // Inner Cluster Ring (Class +1: Red)
+        for(let i=0; i<12; i++) {
+            let angle = (i / 12) * Math.PI * 2;
+            let r = 70;
+            let randMultiplier = (Math.random() - 0.5);
+            baseRingPoints.push({ angle, r, randMultiplier, label: 1 });
+            points.push({ x: cx + Math.cos(angle) * (r + randMultiplier * currentNoise), y: cy + Math.sin(angle) * (r + randMultiplier * currentNoise), label: 1 });
+        }
+
+        // Outer Cluster Ring (Class -1: Blue)
+        for(let i=0; i<18; i++) {
+            let angle = (i / 18) * Math.PI * 2;
+            let r = 160;
+            let randMultiplier = (Math.random() - 0.5);
+            baseRingPoints.push({ angle, r, randMultiplier, label: -1 });
+            points.push({ x: cx + Math.cos(angle) * (r + randMultiplier * currentNoise), y: cy + Math.sin(angle) * (r + randMultiplier * currentNoise), label: -1 });
+        }
+
+        trainKernelSVM();
+        render();
+    }
+
+    function rbfKernel(p1, p2) {
+        let dx = (p1.x - p2.x) / canvas.width;
+        let dy = (p1.y - p2.y) / canvas.height;
+        let squaredEuclideanDist = dx*dx + dy*dy;
+        return Math.exp(-gamma * squaredEuclideanDist);
+    }
+
+    function trainKernelSVM() {
+        const n = points.length;
+        alpha = new Array(n).fill(0);
+        b = 0;
+        if (n < 2) {
+            evaluateConfusionMatrixAndMetrics(0, 0, 0, 0);
+            return;
+        }
+
+        let K_matrix = Array(n).fill(0).map(() => new Array(n).fill(0));
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                K_matrix[i][j] = rbfKernel(points[i], points[j]);
+            }
+        }
+
+        const epochs = 200;
+        const lr = 0.05;
+        const C = 1.0; 
+
+        for (let epoch = 0; epoch < epochs; epoch++) {
+            for (let i = 0; i < n; i++) {
+                let score = 0;
+                for (let j = 0; j < n; j++) {
+                    score += alpha[j] * points[j].label * K_matrix[j][i];
+                }
+                score += b;
+
+                let error = 1 - points[i].label * score;
+                if (error > 0) {
+                    alpha[i] += lr * points[i].label;
+                    if (alpha[i] < 0) alpha[i] = 0;
+                    if (alpha[i] > C) alpha[i] = C;
+                    
+                    b += lr * points[i].label; 
+                }
+            }
+        }
+
+        let svCount = 0;
+        let bSum = 0;
+        for (let i = 0; i < n; i++) {
+            if (alpha[i] > 1e-4) {
+                let s = 0;
+                for (let j = 0; j < n; j++) {
+                    s += alpha[j] * points[j].label * K_matrix[j][i];
+                }
+                bSum += points[i].label - s;
+                svCount++;
+            }
+        }
+        if (svCount > 0) b = bSum / svCount;
+
+        hudStatus.innerHTML = `<strong>🎯 RBF Optimization Converged!</strong><br>The kernel trick successfully projected your non-separable data. Total instances active on margin borders: <b>${svCount}</b>.`;
+
+        // Process Confusion Matrix metrics logs
+        calculateGlobalConfusionMatrix();
+    }
+
+    function classifyPoint(p) {
+        let score = 0;
+        for (let i = 0; i < points.length; i++) {
+            score += alpha[i] * points[i].label * rbfKernel(points[i], p);
+        }
+        return score + b;
+    }
+
+    // --- Aquarium CONFUSION MATRIX GENERATOR ---
+    function calculateGlobalConfusionMatrix() {
+        let tp = 0, tn = 0, fp = 0, fn = 0;
+
+        points.forEach(p => {
+            let score = classifyPoint(p);
+            let predLabel = score >= 0 ? 1 : -1;
+
+            if (p.label === 1 && predLabel === 1) tp++;
+            else if (p.label === -1 && predLabel === -1) tn++;
+            else if (p.label === -1 && predLabel === 1) fp++;
+            else if (p.label === 1 && predLabel === -1) fn++;
+        });
+
+        evaluateConfusionMatrixAndMetrics(tp, tn, fp, fn);
+    }
+
+    function evaluateConfusionMatrixAndMetrics(tp, tn, fp, fn) {
+        countTp.innerText = tp;
+        countTn.innerText = tn;
+        countFp.innerText = fp;
+        countFn.innerText = fn;
+
+        let rowPosTotal = tp + fn;
+        let rowNegTotal = fp + tn;
+        let colPosTotal = tp + fp;
+        let colNegTotal = fn + tn;
+        let grandTotal = tp + tn + fp + fn;
+
+        totalRowPos.innerText = rowPosTotal;
+        totalRowNeg.innerText = rowNegTotal;
+        totalColPos.innerText = colPosTotal;
+        totalColNeg.innerText = colNegTotal;
+        totalGrand.innerText = grandTotal;
+
+        let tpPct = rowPosTotal > 0 ? (tp / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fnPct = rowPosTotal > 0 ? (fn / rowPosTotal * 100).toFixed(1) : '0.0';
+        let fpPct = rowNegTotal > 0 ? (fp / rowNegTotal * 100).toFixed(1) : '0.0';
+        let tnPct = rowNegTotal > 0 ? (tn / rowNegTotal * 100).toFixed(1) : '0.0';
+
+        pctTp.innerText = `${tpPct}%`;
+        pctFn.innerText = `${fnPct}%`;
+        pctFp.innerText = `${fpPct}%`;
+        pctTn.innerText = `${tnPct}%`;
+
+        // Compute Derived Rates Summary Metrics
+        let accuracy = grandTotal > 0 ? (tp + tn) / grandTotal : 0;
+        mValAccuracy.innerText = `${(accuracy * 100).toFixed(1)}%`;
+
+        const targetClassIsPositive = document.querySelector('input[name="metricClassTarget"]:checked').value === "1";
+
+        if (targetClassIsPositive) {
+            precisionLabelText.innerText = "Precision";
+            recallLabelText.innerText = "Sensitivity (Recall)";
+            specificityLabelText.innerText = "Specificity";
+
+            precisionCardDesc.title = "Precision = TP / (TP + FP)";
+            recallCardDesc.title = "Sensitivity = TP / (TP + FN)";
+            specificityCardDesc.title = "Specificity = TN / (TN + FP)";
+
+            let precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+            let recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+            let specificity = (tn + fp) > 0 ? tn / (tn + fp) : 0;
+
+            mValPrecision.innerText = (tp + fp) > 0 ? `${(precision * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tp + fn) > 0 ? `${(recall * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tn + fp) > 0 ? `${(specificity * 100).toFixed(1)}%` : "0.0%";
+        } else {
+            precisionLabelText.innerText = "Precision (-)";
+            recallLabelText.innerText = "Specificity (Recall -)";
+            specificityLabelText.innerText = "Sensitivity (-)";
+
+            precisionCardDesc.title = "Precision (-) = TN / (TN + FN)";
+            recallCardDesc.title = "Specificity (Recall -) = TN / (TN + FP)";
+            specificityCardDesc.title = "Sensitivity (-) = TP / (TP + FN)";
+
+            let precisionNeg = (tn + fn) > 0 ? tn / (tn + fn) : 0;
+            let recallNeg = (tn + fp) > 0 ? tn / (tn + fp) : 0; 
+            let specificityNeg = (tp + fn) > 0 ? tp / (tp + fn) : 0; 
+
+            mValPrecision.innerText = (tn + fn) > 0 ? `${(precisionNeg * 100).toFixed(1)}%` : "0.0%";
+            mValRecall.innerText = (tn + fp) > 0 ? `${(recallNeg * 100).toFixed(1)}%` : "0.0%";
+            mValSpecificity.innerText = (tp + fn) > 0 ? `${(specificityNeg * 100).toFixed(1)}%` : "0.0%";
+        }
+    }
+
+    // --- GRAPHICAL RENDER ENGINE ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Plot Background Decision Boundary Fields Contours
+        if (points.length >= 2) {
+            const step = 4; 
+            for (let x = 0; x < canvas.width; x += step) {
+                for (let y = 0; y < canvas.height; y += step) {
+                    let score = classifyPoint({ x: x + step/2, y: y + step/2 });
+                    
+                    if (score > 0) {
+                        ctx.fillStyle = 'rgba(220, 38, 38, 0.04)'; 
+                    } else {
+                        ctx.fillStyle = 'rgba(37, 99, 235, 0.04)';  
+                    }
+                    ctx.fillRect(x, y, step, step);
+                }
+            }
+
+            // 2. Draw Decision Boundary Zero-Crossings Lines
+            ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5;
+            for (let x = 0; x < canvas.width; x += 6) {
+                for (let y = 0; y < canvas.height; y += 6) {
+                    let score = classifyPoint({ x, y });
+                    let scoreRight = classifyPoint({ x: x + 6, y });
+                    let scoreDown = classifyPoint({ x, y: y + 6 });
+
+                    if (Math.sign(score) !== Math.sign(scoreRight) || Math.sign(score) !== Math.sign(scoreDown)) {
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(x, y, 2.5, 2.5); 
+                    }
+                }
+            }
+        }
+
+        // Draw basic gridlines mesh layout
+        ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
+        for (let i = 40; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+        for (let i = 40; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+        // Draw Data Points on top layer
+        points.forEach((p, idx) => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = p.label === 1 ? HEX_RED : HEX_BLUE;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // Highlight support vectors with an outer ring
+            if (alpha[idx] > 1e-4) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        });
+    }
+
+    // Controls Event listeners configurations
+    gammaSlider.addEventListener('input', (e) => {
+        gamma = parseFloat(e.target.value);
+        gammaVal.innerText = gamma.toFixed(1);
+        trainKernelSVM();
+        render();
+    });
+
+    noiseSlider.addEventListener('input', (e) => {
+        const currentNoise = parseFloat(e.target.value);
+        noiseVal.innerText = currentNoise;
+
+        if (baseRingPoints.length > 0) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            points = baseRingPoints.map(p => ({
+                x: cx + Math.cos(p.angle) * (p.r + p.randMultiplier * currentNoise),
+                y: cy + Math.sin(p.angle) * (p.r + p.randMultiplier * currentNoise),
+                label: p.label
+            }));
+            trainKernelSVM();
+            render();
+        }
+    });
+
+    [metricTargetA, metricTargetB].forEach(radio => {
+        radio.addEventListener('change', calculateGlobalConfusionMatrix);
+    });
+
+    btnSample.addEventListener('click', loadCircularSample);
+    btnClear.addEventListener('click', () => { points = []; baseRingPoints = []; alpha = []; b = 0; updateHUDStatus(); evaluateConfusionMatrixAndMetrics(0,0,0,0); render(); });
+
+    function updateHUDStatus() {
+        hudStatus.innerHTML = `<strong>Model Status: Awaiting Data</strong><br>Plot a combination of red and blue coordinates to form a non-linear classification plane.`;
+    }
+
+    // Initial Startup Configuration Setup
+    setTimeout(() => { resizeCanvas(); }, 100);
+</script>
+</body>
+</html>
