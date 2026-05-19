@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Bootstrapping Simulation Lab</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 950px;
+            width: 100%;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1e3a8a;
+            margin-top: 0;
+            font-size: 1.8rem;
+        }
+        .pool-container {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px dashed #cbd5e1;
+        }
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #475569;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+        .element-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .data-node {
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: white;
+            position: relative;
+        }
+        
+        .node-color { background-color: #3b82f6; border: 1px solid #1d4ed8; }
+        .boot-color { background-color: #10b981; border: 1px solid #047857; }
+
+        .controls {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        label {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+        input[type="number"] {
+            width: 75px;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        button {
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-secondary { background-color: #e2e8f0; color: #475569; }
+        .btn-secondary:hover { background-color: #cbd5e1; }
+        
+        .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #0f172a;
+            color: white;
+            font-size: 0.65rem;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+        }
+        
+        /* Adjusted layout to allow unlimited page-level expansion instead of internal scrollbars */
+        .table-wrapper {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+        }
+        tr:hover { background-color: #f8fafc; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Resampling Lab: Advanced Bootstrapping Simulator</h1>
+<h1>by Professor Periklis Gogas</h1>
+    <p>Set your original sample data metrics below. The system will auto-generate an initial baseline dataset and extract custom resamples <strong>with replacement</strong> mimicking standard statistical bootstrap conditions.</p>
+
+    <div class="pool-container">
+        <div class="section-title" id="origGridTitle">Original Sample Dataset</div>
+        <div id="originalGrid" class="element-grid"></div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="sampleSize">Original Sample Size (n):</label>
+            <input type="number" id="sampleSize" value="10" min="4" max="30" onchange="generateOriginalData()">
+        </div>
+        <div class="control-group">
+            <label for="sampleCount">Bootstrap Replications (B):</label>
+            <input type="number" id="sampleCount" value="5" min="1" max="1000">
+        </div>
+        <button class="btn-primary" onclick="runSimulation()">Execute Bootstrap</button>
+        <button class="btn-secondary" onclick="generateOriginalData()">Regenerate Baseline</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card" style="border-left: 4px solid #3b82f6;">
+            <div class="section-title">Original Sample Estimates</div>
+            <div class="stat-row">Mean (x̄): <span id="origMean" style="font-weight:700;">-</span></div>
+            <div class="stat-row">Std Dev (s): <span id="origSD" style="font-weight:700;">-</span></div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #10b981;">
+            <div class="section-title">Aggregate Resample Metrics</div>
+            <div class="stat-row">Grand Mean (x̄*): <span id="grandMean" style="font-weight:700;">-</span></div>
+            <div class="stat-row">Standard Error (SE<sub>B</sub>): <span id="seEstimates" style="font-weight:700;">-</span></div>
+        </div>
+    </div>
+
+    <div class="pool-container" style="background: #ffffff; border-style: solid; border-width: 1px;">
+        <div class="section-title" style="color: #1e3a8a;">Generated Sample Registry</div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">ID</th>
+                        <th style="width: 52%;">Resample Array Visualizations (With Replacement Counts)</th>
+                        <th style="width: 16%;">Distinct Elements Chosen</th>
+                        <th style="width: 12%;">Mean (x̄*<sub>b</sub>)</th>
+                        <th style="width: 12%;">Std Dev (s*<sub>b</sub>)</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 30px;">No samples generated yet. Click 'Execute Bootstrap'.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let originalData = [];
+    let n = 10;
+
+    function calculateSampleMetrics(arr) {
+        if (arr.length === 0) return { mean: 0, sd: 0 };
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        if (arr.length <= 1) return { mean: mean, sd: 0 };
+        const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (arr.length - 1);
+        return { mean: mean, sd: Math.sqrt(variance) };
+    }
+
+    function generateOriginalData() {
+        const inputSize = parseInt(document.getElementById('sampleSize').value);
+        if (isNaN(inputSize) || inputSize < 4 || inputSize > 30) return;
+        
+        n = inputSize;
+        originalData = [];
+        document.getElementById('origGridTitle').innerText = `Original Sample Dataset (n = ${n})`;
+
+        for (let i = 0; i < n; i++) {
+            originalData.push(Math.floor(Math.random() * 40) + 10);
+        }
+
+        const origGrid = document.getElementById('originalGrid');
+        origGrid.innerHTML = '';
+        originalData.forEach((val, idx) => {
+            origGrid.innerHTML += `<div class="data-node node-color" title="Index Location: ${idx}">${val}</div>`;
+        });
+        
+        const origMetrics = calculateSampleMetrics(originalData);
+        document.getElementById('origMean').innerText = origMetrics.mean.toFixed(2);
+        document.getElementById('origSD').innerText = origMetrics.sd.toFixed(2);
+        
+        clearTableFrame();
+    }
+
+    function clearTableFrame() {
+        document.getElementById('grandMean').innerText = '-';
+        document.getElementById('seEstimates').innerText = '-';
+        document.getElementById('resultsTableBody').innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 30px;">No samples generated yet. Click 'Execute Bootstrap'.</td>
+            </tr>`;
+    }
+
+    function runSimulation() {
+        const B = parseInt(document.getElementById('sampleCount').value);
+        if (isNaN(B) || B < 1) return;
+
+        const tableBody = document.getElementById('resultsTableBody');
+        tableBody.innerHTML = '';
+
+        let allMeans = [];
+
+        for (let b = 1; b <= B; b++) {
+            let bootstrapSample = [];
+            let uniqueValuesInSample = new Set();
+
+            for (let i = 0; i < n; i++) {
+                let randIdx = Math.floor(Math.random() * n);
+                let val = originalData[randIdx];
+                bootstrapSample.push(val);
+                uniqueValuesInSample.add(randIdx); 
+            }
+
+            const metrics = calculateSampleMetrics(bootstrapSample);
+            allMeans.push(metrics.mean);
+
+            const distinctCountText = `${uniqueValuesInSample.size} / ${n} values`;
+
+            let nodesHtml = '<div class="element-grid">';
+            let countMap = {};
+            bootstrapSample.forEach(val => {
+                countMap[val] = (countMap[val] || 0) + 1;
+            });
+
+            let renderedCounts = {};
+            bootstrapSample.forEach(val => {
+                renderedCounts[val] = (renderedCounts[val] || 0) + 1;
+                let badge = countMap[val] > 1 ? `<div class="badge">${renderedCounts[val]}</div>` : '';
+                nodesHtml += `<div class="data-node boot-color">${val}${badge}</div>`;
+            });
+            nodesHtml += '</div>';
+
+            tableBody.innerHTML += `
+                <tr>
+                    <td><strong>#${b}</strong></td>
+                    <td>${nodesHtml}</td>
+                    <td><span style="color: #047857; font-weight: 600;">${distinctCountText}</span></td>
+                    <td>${metrics.mean.toFixed(2)}</td>
+                    <td>${metrics.sd.toFixed(2)}</td>
+                </tr>`;
+        }
+
+        const grandMeanVal = allMeans.reduce((a, b) => a + b, 0) / B;
+        const seVal = B > 1 ? Math.sqrt(allMeans.reduce((a, b) => a + Math.pow(b - grandMeanVal, 2), 0) / (B - 1)) : 0;
+
+        document.getElementById('grandMean').innerText = grandMeanVal.toFixed(2);
+        document.getElementById('seEstimates').innerText = seVal.toFixed(2);
+    }
+
+    generateOriginalData();
+</script>
+
+</body>
+</html>
